@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cockpit Panel Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: an aircraft panel. Glass PFD beside the six-pack on top, the lower panel holds flight controls and aircraft systems. Deliberately one dark look, like a real panel at dusk. */
+:root{
+  --bg:#15181a; --panel:#21262a; --panel-2:#2a3034; --bezel:#0c0e0f; --line:#353c41;
+  --ink:#eceeec; --ink-dim:#9aa4a8; --ink-faint:#5c666b;
+  --amber:#f3a83c; --green:#46c46f; --red:#e4473b; --yellow:#ecd23c; --cyan:#41d1e3; --magenta:#d861d6;
+  --sky:#2a72c4; --ground:#8b5a2b; --face:#121415;
+  --ann-off:#191c1e; --ann-off-ink:#3b4246;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"B612",system-ui,sans-serif;
+  --mono:"B612 Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;padding-inline:16px}
+.wrap{max-width:1400px;margin:0 auto;padding-block:16px 48px;display:grid;gap:16px}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,.yoke:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.brand h1{margin:0;font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:.04em;text-transform:uppercase;line-height:1;text-wrap:balance}
+.brand p{margin:0;color:var(--ink-dim);font-size:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:7px 12px;font-family:var(--body);font-size:12px;color:var(--ink);cursor:pointer}
+.btn:hover,select:hover{border-color:var(--ink-faint)}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--bezel)}
+.clock{font-family:var(--mono);font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+
+/* deck */
+.deck{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.deck{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0}
+.placard{margin:0 0 12px;font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.placard small{font-family:var(--body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-faint)}
+.pfd{width:100%;max-width:100%;aspect-ratio:4/3;display:block;border-radius:4px;background:var(--bezel);border:6px solid var(--bezel);box-shadow:0 0 0 1px var(--line)}
+.note{margin:10px 0 0;color:var(--ink-dim);font-size:12px;max-width:68ch}
+
+.six{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 12px}
+@media (max-width:560px){.six{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.gauge{display:flex;flex-direction:column;gap:6px;min-width:0}
+.gauge canvas{width:100%;max-width:100%;aspect-ratio:1;display:block;cursor:default}
+.gauge canvas.knobbed{cursor:ns-resize}
+.gname{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.08em;text-transform:uppercase}
+.gcap{color:var(--ink-dim);font-size:11px;line-height:1.4}
+.knobs{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.knobs .btn{padding:3px 9px;font-family:var(--mono)}
+.knobs output{font-family:var(--mono);font-size:12px;color:var(--cyan);min-width:4.5em;text-align:center;font-variant-numeric:tabular-nums}
+
+/* lower panel */
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.ctl{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lbl{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+.val{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+.yoke{position:relative;width:170px;height:170px;max-width:100%;border-radius:8px;background:
+  linear-gradient(var(--line),var(--line)) center/1px 100% no-repeat,
+  linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat, var(--bezel);
+  border:1px solid var(--line);touch-action:none;cursor:grab;user-select:none}
+.yoke:active{cursor:grabbing}
+.yoke .kn{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#59636a,#1d2124);border:2px solid var(--ink-dim);left:50%;top:50%}
+.yoke span{position:absolute;font-size:10px;color:var(--ink-faint);font-family:var(--mono)}
+.yoke .t{top:4px;left:0;right:0;text-align:center}.yoke .b{bottom:4px;left:0;right:0;text-align:center}
+.yoke .l{left:5px;top:50%;transform:translateY(-140%)}.yoke .r{right:5px;top:50%;transform:translateY(-140%)}
+
+input[type=range]{width:100%;accent-color:var(--ink);min-width:0}
+.sliders{display:grid;gap:10px;flex:1 1 160px;min-width:0}
+.sl-head{display:flex;justify-content:space-between;gap:8px}
+#thr{accent-color:var(--ink)} #mix{accent-color:var(--red)} #rud{accent-color:var(--ink-dim)}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;flex-wrap:wrap}
+.seg button{background:var(--bezel);border:0;border-right:1px solid var(--line);padding:6px 10px;font-family:var(--mono);font-size:12px;cursor:pointer;color:var(--ink-dim)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bezel)}
+.seg button.start[aria-pressed="true"]{background:var(--amber)}
+
+.switches{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:12px 6px}
+.sw{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer}
+.sw .rk{width:26px;height:42px;border-radius:4px;background:var(--bezel);border:1px solid var(--line);position:relative}
+.sw .rk::after{content:"";position:absolute;left:3px;right:3px;height:17px;top:21px;border-radius:2px;background:var(--ink-faint);transition:top .12s}
+.sw[aria-pressed="true"] .rk::after{top:3px;background:var(--ink)}
+.sw.red .rk{border-color:#5a2a26}
+.sw b{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);text-align:center;line-height:1.1}
+
+.gear{display:flex;gap:12px;align-items:center}
+.lever{width:46px;height:64px;border-radius:6px;background:var(--bezel);border:1px solid var(--line);cursor:pointer;position:relative}
+.lever::after{content:"";position:absolute;left:50%;width:26px;height:20px;margin-left:-13px;border-radius:10px;background:radial-gradient(circle at 40% 35%,#f4f4f2,#9aa1a4);top:38px;transition:top .2s}
+.lever[aria-pressed="false"]::after{top:6px}
+.lights{display:flex;gap:6px}
+.lt{width:16px;height:16px;border-radius:50%;background:var(--ann-off);border:1px solid var(--line)}
+.lt.g{background:var(--green);box-shadow:0 0 8px var(--green)}
+.lt.r{background:var(--red);box-shadow:0 0 8px var(--red)}
+
+.trim{display:flex;align-items:center;gap:8px}
+.trimbar{position:relative;width:12px;height:64px;border-radius:3px;background:var(--bezel);border:1px solid var(--line)}
+.trimbar i{position:absolute;left:-4px;right:-4px;height:4px;background:var(--amber);top:50%}
+.trimbar::before{content:"";position:absolute;left:-6px;width:6px;height:1px;background:var(--ink-dim);top:calc(50% - 6%)}
+.stack{display:flex;flex-direction:column;gap:4px}
+.stack .btn{padding:4px 8px;font-size:11px}
+
+.bars{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 14px;flex:1 1 200px;min-width:0}
+.bg{display:flex;flex-direction:column;gap:4px;min-width:0}
+.bg .h{display:flex;justify-content:space-between;gap:6px;font-size:11px}
+.bg .h span{font-family:var(--display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
+.bg .h b{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+.track{position:relative;height:8px;background:var(--bezel);border-radius:2px;border:1px solid var(--line)}
+.track .s{position:absolute;top:0;bottom:0}
+.track .m{position:absolute;top:-6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ink);margin-left:-5px;transition:left .1s linear}
+.tach{width:150px;max-width:100%;aspect-ratio:1;display:block}
+
+.ann-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.ann{background:var(--ann-off);color:var(--ann-off-ink);border:1px solid var(--line);border-radius:3px;padding:7px 4px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em}
+.ann.on.red{background:var(--red);color:var(--bezel);border-color:var(--red)}
+.ann.on.amber{background:var(--amber);color:var(--bezel);border-color:var(--amber)}
+.ann.on.green{background:var(--green);color:var(--bezel);border-color:var(--green)}
+.ann.flash{animation:fl .5s steps(2) infinite}
+@keyframes fl{50%{opacity:.35}}
+
+.ap{display:grid;gap:10px}
+.ap-btns{display:flex;gap:6px;flex-wrap:wrap}
+.ap-btns .btn{font-family:var(--mono);min-width:56px;position:relative;padding-top:12px}
+.ap-btns .btn::before{content:"";position:absolute;top:4px;left:50%;width:18px;height:3px;margin-left:-9px;border-radius:2px;background:var(--ann-off-ink)}
+.ap-btns .btn[aria-pressed="true"]{background:var(--panel-2);color:var(--ink)}
+.ap-btns .btn[aria-pressed="true"]::before{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+.fails{display:grid;gap:8px}
+.fails label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.fails input{accent-color:var(--red);margin-top:3px}
+.fails b{font-weight:700;font-size:13px}
+.fails span{display:block;color:var(--ink-dim);font-size:11px}
+
+.keys{color:var(--ink-dim);font-size:12px;display:flex;flex-wrap:wrap;gap:6px 18px}
+kbd{font-family:var(--mono);font-size:11px;background:var(--panel-2);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:1px 5px;color:var(--ink)}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bezel);padding:8px 14px;border-radius:4px;font-size:13px;max-width:calc(100% - 32px);z-index:5;transition:opacity .3s}
+.toast[hidden]{display:none!important}
+.crash{position:fixed;inset:0;background:rgba(8,9,10,.78);display:grid;place-items:center;padding:16px;z-index:6}
+.crash .card{background:var(--panel);border:1px solid var(--red);border-radius:6px;padding:20px;max-width:420px;width:100%;display:grid;gap:12px}
+.crash h2{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.06em;text-transform:uppercase;color:var(--red)}
+.crash ul{margin:0;padding-left:18px;color:var(--ink-dim)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Cockpit Panel Trainer</h1>
+      <p>Light single-engine, retractable gear. Fly with the yoke pad or the keyboard.</p>
+    </div>
+    <div class="bar">
+      <label class="lbl" for="scn">Start</label>
+      <select id="scn">
+        <option value="cruise">Cruise, 3,500 ft</option>
+        <option value="approach">Approach, 1,500 ft</option>
+        <option value="ground">On the runway, cold and dark</option>
+      </select>
+      <button class="btn" id="reset" type="button">Reset</button>
+      <button class="btn" id="pause" type="button" aria-pressed="false">Pause</button>
+      <span class="clock" id="clock">00:00</span>
+    </div>
+  </header>
+
+  <section class="deck">
+    <div class="panel">
+      <h2 class="placard">Primary flight display <small>Electric AHRS and air data computer</small></h2>
+      <canvas class="pfd" id="pfd" data-g="pfd" data-w="640" data-h="480" aria-label="Primary flight display"></canvas>
+      <p class="note">Speed tape left, altitude and vertical speed right, heading at the bottom. Cyan marks your selections. The PFD needs battery and avionics power, but its attitude comes from an electric AHRS, so it keeps working when the vacuum pump fails.</p>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Standby six-pack <small>Scroll on a gauge with a knob to turn it</small></h2>
+      <div class="six">
+        <div class="gauge"><canvas data-g="asi" aria-label="Airspeed indicator"></canvas>
+          <div class="gname">Airspeed</div><div class="gcap">Pitot minus static pressure, in knots. White arc for flaps, green normal, yellow caution, red line never exceed.</div></div>
+        <div class="gauge"><canvas data-g="ai" aria-label="Attitude indicator"></canvas>
+          <div class="gname">Attitude</div><div class="gcap">Vacuum gyro. Pitch and bank against the horizon. Tumbles slowly if suction is lost.</div></div>
+        <div class="gauge"><canvas data-g="alt" class="knobbed" aria-label="Altimeter"></canvas>
+          <div class="gname">Altimeter</div>
+          <div class="knobs"><button class="btn" type="button" data-k="baro-">−</button><output id="baroOut">29.92</output><button class="btn" type="button" data-k="baro+">+</button></div>
+          <div class="gcap">Static pressure altitude in feet. Set the local altimeter: ATIS reports <b>30.01</b> in Hg.</div></div>
+        <div class="gauge"><canvas data-g="tc" aria-label="Turn coordinator"></canvas>
+          <div class="gname">Turn coordinator</div><div class="gcap">Electric gyro. Wing on the mark is a standard-rate turn, 3° per second. Step on the ball to centre it.</div></div>
+        <div class="gauge"><canvas data-g="hi" class="knobbed" aria-label="Heading indicator"></canvas>
+          <div class="gname">Heading</div>
+          <div class="knobs"><button class="btn" type="button" data-k="hdg-">−</button><output id="bugOut">090°</output><button class="btn" type="button" data-k="hdg+">+</button><button class="btn" type="button" data-k="sync">SYNC</button></div>
+          <div class="gcap">Vacuum gyro heading. The orange bug is the autopilot heading. SYNC realigns the card to the compass.</div></div>
+        <div class="gauge"><canvas data-g="vsi" aria-label="Vertical speed indicator"></canvas>
+          <div class="gname">Vertical speed</div><div class="gcap">Climb or descent in feet per minute, from the rate of static pressure change. Lags a few seconds.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="panel">
+      <h2 class="placard">Flight controls</h2>
+      <div class="row">
+        <div class="ctl">
+          <span class="lbl">Yoke</span>
+          <div class="yoke" id="yoke" tabindex="0" aria-label="Yoke: drag to pitch and roll, springs back to centre">
+            <span class="t">PUSH · nose down</span><span class="b">PULL · nose up</span>
+            <span class="l">◀ L</span><span class="r">R ▶</span>
+            <div class="kn" id="yokeKnob"></div>
+          </div>
+        </div>
+        <div class="sliders">
+          <div class="ctl"><div class="sl-head"><label class="lbl" for="thr">Throttle</label><span class="val" id="thrV">78%</span></div><input type="range" id="thr" min="0" max="100" value="78"></div>
+          <div class="ctl"><div class="sl-head"><label class="lbl" for="mix">Mixture</label><span class="val" id="mixV">85%</span></div><input type="range" id="mix" min="0" max="100" value="85"></div>
+          <div class="ctl"><div class="sl-head"><label class="lbl" for="rud">Rudder</label><span class="val" id="rudV">0</span></div><input type="range" id="rud" min="-100" max="100" value="0"></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="ctl"><span class="lbl">Flaps</span>
+          <div class="seg" id="flaps"><button type="button" data-v="0">0°</button><button type="button" data-v="10">10°</button><button type="button" data-v="20">20°</button><button type="button" data-v="30">30°</button></div>
+          <span class="val" id="flapV">Position 0°</span></div>
+        <div class="ctl"><span class="lbl">Elevator trim</span>
+          <div class="trim"><div class="stack"><button class="btn" type="button" id="trimDn">Nose dn</button><button class="btn" type="button" id="trimUp">Nose up</button></div><div class="trimbar"><i id="trimI"></i></div></div></div>
+        <div class="ctl"><span class="lbl">Landing gear</span>
+          <div class="gear"><button class="lever" type="button" id="gearLever" aria-pressed="false" aria-label="Gear handle"></button>
+            <div class="stack"><div class="lights"><i class="lt" id="g1"></i><i class="lt" id="g2"></i><i class="lt" id="g3"></i></div><span class="val" id="gearV">UP</span>
+            <button class="btn" type="button" id="brakes">Hold brakes</button></div></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Engine <small id="ffV">Fuel flow 0.0 gph</small></h2>
+      <div class="row">
+        <canvas class="tach" data-g="tach" aria-label="Tachometer"></canvas>
+        <div class="bars" id="bars"></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="ctl"><span class="lbl">Magnetos / start</span>
+          <div class="seg" id="mags"><button type="button" data-v="OFF">OFF</button><button type="button" data-v="R">R</button><button type="button" data-v="L">L</button><button type="button" data-v="BOTH">BOTH</button><button type="button" class="start" data-v="START">START</button></div>
+          <span class="gcap">Hold START to crank. Needs battery, fuel and mixture rich.</span></div>
+        <div class="ctl"><span class="lbl">Fuel selector</span>
+          <div class="seg" id="fuelSel"><button type="button" data-v="L">LEFT</button><button type="button" data-v="BOTH">BOTH</button><button type="button" data-v="R">RIGHT</button><button type="button" data-v="OFF">OFF</button></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Electrical and lights <small id="busV">Bus 28.0 V</small></h2>
+      <div class="switches" id="switches"></div>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Autopilot <small id="apState">Disengaged</small></h2>
+      <div class="ap">
+        <div class="ap-btns">
+          <button class="btn" type="button" id="apBtn" aria-pressed="false">AP</button>
+          <button class="btn" type="button" id="hdgBtn" aria-pressed="false">HDG</button>
+          <button class="btn" type="button" id="altBtn" aria-pressed="false">ALT</button>
+        </div>
+        <div class="row">
+          <div class="ctl"><span class="lbl">Heading bug</span><div class="knobs"><button class="btn" type="button" data-k="hdg-">−</button><output id="bugOut2">090°</output><button class="btn" type="button" data-k="hdg+">+</button></div></div>
+          <div class="ctl"><span class="lbl">Altitude select</span><div class="knobs"><button class="btn" type="button" data-k="sel-">−</button><output id="selOut">3,500</output><button class="btn" type="button" data-k="sel+">+</button></div></div>
+        </div>
+        <p class="gcap" style="margin:0">AP alone holds wings level and the current pitch. HDG turns to the bug. ALT climbs or descends to the selected altitude and holds it. A firm push on the yoke disconnects it.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Annunciators <button class="btn" type="button" id="annTest" style="padding:3px 9px">Test</button></h2>
+      <div class="ann-grid" id="anns"></div>
+    </div>
+
+    <div class="panel">
+      <h2 class="placard">Failure training</h2>
+      <div class="fails" id="fails"></div>
+    </div>
+  </section>
+
+  <div class="panel keys" aria-label="Keyboard shortcuts">
+    <span><kbd>↑</kbd><kbd>↓</kbd> push / pull</span>
+    <span><kbd>←</kbd><kbd>→</kbd> roll</span>
+    <span><kbd>Q</kbd><kbd>E</kbd> rudder</span>
+    <span><kbd>−</kbd><kbd>=</kbd> throttle</span>
+    <span><kbd>Home</kbd><kbd>End</kbd> trim</span>
+    <span><kbd>[</kbd><kbd>]</kbd> flaps</span>
+    <span><kbd>G</kbd> gear</span>
+    <span><kbd>B</kbd> brakes</span>
+    <span><kbd>A</kbd> AP <kbd>H</kbd> HDG <kbd>L</kbd> ALT</span>
+    <span><kbd>P</kbd> pause</span>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="crash" id="crash" hidden>
+  <div class="card">
+    <h2 id="crashTitle">Crashed</h2>
+    <ul id="crashList"></ul>
+    <div class="bar"><button class="btn" type="button" id="crashReset">Try again</button></div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const D2R=Math.PI/180, R2D=180/Math.PI, TAU=Math.PI*2;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const approach=(v,t,rate,dt)=>{const d=t-v,s=rate*dt;return Math.abs(d)<=s?t:v+Math.sign(d)*s};
+const ease=(v,t,tau,dt)=>v+(t-v)*(1-Math.exp(-dt/tau));
+const wrap=h=>((h%360)+360)%360;
+const angDiff=(a,b)=>((a-b+540)%360)-180;
+const $=s=>document.querySelector(s);
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const pad3=n=>String(Math.round(wrap(n))%360).padStart(3,'0');
+
+const css=getComputedStyle(document.documentElement);
+const C={};
+['ink','ink-dim','ink-faint','amber','green','red','yellow','cyan','magenta','sky','ground','face','bezel'].forEach(k=>C[k]=css.getPropertyValue('--'+k).trim());
+
+const QNH=30.01;
+let S, paused=false, scenario='cruise';
+
+function make(kind){
+  const s={alt:3500,ias:110,pitch:1.6,bank:0,hdg:90,vs:0,vsInd:0,slip:0,turnRate:0,rollRate:0,
+    onGround:false,crashed:false,t:0,
+    elev:0,ail:0,rud:0,thr:.785,mix:.85,trim:.16,brakes:false,
+    flapSel:0,flapPos:0,gearDown:false,gearPos:0,
+    running:true,P:.75,rpm:2270,crank:0,oilT:185,oilP:72,egt:1190,mag:'BOTH',gph:8,
+    fuelL:21,fuelR:20.4,fuelSel:'BOTH',
+    sw:{bat:true,alt:true,avionics:true,pump:false,beacon:true,nav:true,strobe:true,land:false,taxi:false,pitot:false},
+    busV:28.2,amps:1.5,charge:1,vac:5,gyro:1,tcGyro:1,
+    ap:{on:false,lat:'ROL',vert:'PIT',pitchRef:0},
+    hdgBug:90,selAlt:3500,baro:29.92,hiDrift:0,
+    fail:{vac:false,alt:false,pitot:false,static:false},frz:{ias:0,altP:0,altS:0},
+    iasInd:110,altInd:3500,apFlash:0,tach:1234.5};
+  if(kind==='approach'){
+    Object.assign(s,{alt:1500,ias:80,pitch:.6,hdg:270,hdgBug:270,selAlt:1500,thr:.36,P:.34,rpm:1440,trim:.06,
+      flapSel:10,flapPos:10,gearDown:true,gearPos:1,baro:30.01,mix:1,oilT:175,oilP:60,egt:1120});
+  }
+  if(kind==='ground'){
+    Object.assign(s,{alt:0,ias:0,pitch:0,hdg:90,hdgBug:90,selAlt:3000,vs:0,onGround:true,running:false,P:0,rpm:0,
+      thr:0,mix:0,trim:.25,gearDown:true,gearPos:1,mag:'OFF',oilT:60,oilP:0,egt:100,busV:0,amps:0,vac:0,gyro:0,tcGyro:0,
+      sw:{bat:false,alt:false,avionics:false,pump:false,beacon:false,nav:false,strobe:false,land:false,taxi:false,pitot:false}});
+  }
+  s.iasInd=s.ias; s.altInd=s.alt+(s.baro-QNH)*1000;
+  return s;
+}
+
+/* ------------- input ------------- */
+const kb={};
+let padX=0,padY=0,padActive=false,rudHeld=false,kbX=0,kbY=0,kbR=0;
+const yoke=$('#yoke'), knob=$('#yokeKnob');
+function padMove(e){const r=yoke.getBoundingClientRect();padX=clamp((e.clientX-r.left)/r.width*2-1,-1,1);padY=clamp((e.clientY-r.top)/r.height*2-1,-1,1)}
+yoke.addEventListener('pointerdown',e=>{padActive=true;yoke.setPointerCapture(e.pointerId);padMove(e)});
+yoke.addEventListener('pointermove',e=>{if(padActive)padMove(e)});
+['pointerup','pointercancel','lostpointercapture'].forEach(ev=>yoke.addEventListener(ev,()=>padActive=false));
+
+const thrEl=$('#thr'),mixEl=$('#mix'),rudEl=$('#rud');
+thrEl.addEventListener('input',()=>S.thr=thrEl.value/100);
+mixEl.addEventListener('input',()=>S.mix=mixEl.value/100);
+rudEl.addEventListener('pointerdown',()=>rudHeld=true);
+['pointerup','pointercancel'].forEach(ev=>rudEl.addEventListener(ev,()=>rudHeld=false));
+rudEl.addEventListener('input',()=>{});
+
+function typing(e){const t=e.target;return t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')}
+window.addEventListener('keydown',e=>{
+  if(typing(e)&&e.target.type==='range'&&e.code.startsWith('Arrow'))return;
+  if(typing(e)&&e.target.tagName==='SELECT')return;
+  const c=e.code;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Home','End'].includes(c))e.preventDefault();
+  if(e.repeat&&['KeyG','KeyA','KeyH','KeyL','KeyP','BracketLeft','BracketRight'].includes(c))return;
+  kb[c]=true;
+  if(c==='KeyG')toggleGear();
+  if(c==='BracketRight')setFlaps(Math.min(30,S.flapSel+10));
+  if(c==='BracketLeft')setFlaps(Math.max(0,S.flapSel-10));
+  if(c==='KeyA')toggleAP();
+  if(c==='KeyH')apMode('HDG');
+  if(c==='KeyL')apMode('ALT');
+  if(c==='KeyP')togglePause();
+});
+window.addEventListener('keyup',e=>{kb[e.code]=false});
+window.addEventListener('blur',()=>{for(const k in kb)kb[k]=false});
+
+function readInputs(dt){
+  const ty=(kb.ArrowDown?1:0)-(kb.ArrowUp?1:0), tx=(kb.ArrowRight?1:0)-(kb.ArrowLeft?1:0), tr=(kb.KeyE?1:0)-(kb.KeyQ?1:0);
+  kbY=ty?approach(kbY,ty,2.5,dt):approach(kbY,0,4,dt);
+  kbX=tx?approach(kbX,tx,2.5,dt):approach(kbX,0,4,dt);
+  kbR=tr?approach(kbR,tr,2.5,dt):approach(kbR,0,4,dt);
+  if(!padActive){padX=approach(padX,0,3,dt);padY=approach(padY,0,3,dt)}
+  knob.style.left=(50+padX*40)+'%'; knob.style.top=(50+padY*40)+'%';
+  S.elev=clamp(padY+kbY,-1,1); S.ail=clamp(padX+kbX,-1,1);
+  let rv=rudEl.value/100;
+  if(!rudHeld&&rv!==0){rv=approach(rv,0,3,dt);rudEl.value=Math.round(rv*100)}
+  S.rud=clamp(rv+kbR,-1,1);
+  if(kb.Equal||kb.NumpadAdd){S.thr=clamp(S.thr+.4*dt,0,1)}
+  if(kb.Minus||kb.NumpadSubtract){S.thr=clamp(S.thr-.4*dt,0,1)}
+  if(kb.Home)S.trim=clamp(S.trim-.25*dt,-1,1);
+  if(kb.End)S.trim=clamp(S.trim+.25*dt,-1,1);
+  S.brakes=!!kb.KeyB||brakeBtnHeld;
+}
+
+/* ------------- simulation ------------- */
+const alphaOf=(v,flapF)=>-2+12*Math.pow(60/Math.max(v,25),2)-3*flapF;
+const mixFactor=m=>m<.12?0:m<.55?(m-.12)/.43:1-Math.max(0,m-.7)*.3;
+
+function step(dt){
+  if(S.crashed)return;
+  S.t+=dt;
+  const sw=S.sw;
+  // electrical
+  const loads=2+(sw.avionics?8:0)+(sw.beacon?1:0)+(sw.strobe?2:0)+(sw.nav?1.5:0)+(sw.land?8:0)+(sw.taxi?4:0)+(sw.pitot?10:0)+(sw.pump?2:0)+(S.mag==='START'?90:0)+(S.flapMoving||S.gearMoving?6:0);
+  const altOn=sw.bat&&sw.alt&&!S.fail.alt&&S.rpm>900;
+  if(!sw.bat){S.busV=ease(S.busV,0,.1,dt);S.amps=0}
+  else if(altOn){S.busV=ease(S.busV,28.2,.5,dt);S.amps=ease(S.amps,S.charge<.98?9:1.5,.8,dt);S.charge=Math.min(1,S.charge+dt/1800)}
+  else{const v=S.charge>0?22.6+1.9*S.charge-(S.mag==='START'?3.5:0):0;S.busV=ease(S.busV,v,.3,dt);S.amps=ease(S.amps,-loads,.3,dt);S.charge=Math.max(0,S.charge-loads*dt/(35*3600))}
+  const powered=S.busV>18; S.powered=powered;
+
+  // engine
+  const fuelAvail=S.fuelSel==='OFF'?false:S.fuelSel==='L'?S.fuelL>.05:S.fuelSel==='R'?S.fuelR>.05:(S.fuelL+S.fuelR)>.05;
+  if(S.running&&(S.mag==='OFF'||!fuelAvail||S.mix<.12)){S.running=false;toast(S.mag==='OFF'?'Engine stopped: magnetos off':!fuelAvail?'Engine stopped: fuel starvation':'Engine stopped: mixture at idle cut-off')}
+  if(S.mag==='START'&&powered&&!S.running){S.crank+=dt;if(S.crank>1.4&&fuelAvail&&S.mix>.3){S.running=true;toast('Engine started')}}else S.crank=0;
+  const magF=S.mag==='L'||S.mag==='R'?.96:1;
+  const Pt=S.running?clamp(S.thr,0,1)*mixFactor(S.mix)*magF:0;
+  S.P=ease(S.P,Pt,.7,dt);
+  let rpmT;
+  if(S.running)rpmT=700+S.P*1950+S.ias;
+  else if(S.mag==='START'&&powered)rpmT=260;
+  else rpmT=S.onGround?0:Math.min(900,S.ias*6);
+  S.rpm=ease(S.rpm,Math.min(2900,rpmT),S.running?.6:1.2,dt);
+  S.oilP=ease(S.oilP,S.running?25+55*Math.min(1,S.rpm/2400):0,1.5,dt);
+  S.oilT=ease(S.oilT,S.running?110+90*S.rpm/2700:60,60,dt);
+  S.egt=ease(S.egt,S.running?1050+420*S.P*(1-1.6*Math.abs(S.mix-.62)):100,6,dt);
+  S.gph=S.running?1.8+8.5*S.P*(.6+.5*S.mix):0;
+  const burn=S.gph*dt/3600;
+  if(S.fuelSel==='L')S.fuelL=Math.max(0,S.fuelL-burn);
+  else if(S.fuelSel==='R')S.fuelR=Math.max(0,S.fuelR-burn);
+  else if(S.fuelSel==='BOTH'){const l=S.fuelL>0,r=S.fuelR>0;if(l&&r){S.fuelL-=burn/2;S.fuelR-=burn/2}else if(l)S.fuelL-=burn;else if(r)S.fuelR-=burn;S.fuelL=Math.max(0,S.fuelL);S.fuelR=Math.max(0,S.fuelR)}
+  if(S.running)S.tach+=dt/3600*(S.rpm/2400);
+
+  // vacuum gyros & electric TC
+  S.vac=ease(S.vac,(S.running&&!S.fail.vac)?4.6+.6*Math.min(1,S.rpm/2500):0,1,dt);
+  S.gyro=S.vac>4?Math.min(1,S.gyro+dt/20):Math.max(0,S.gyro-dt/60);
+  S.tcGyro=powered?Math.min(1,S.tcGyro+dt/8):Math.max(0,S.tcGyro-dt/15);
+  if(S.gyro<.95)S.hiDrift+=(1-S.gyro)*dt*4;
+
+  // flaps & gear (electric)
+  S.flapMoving=powered&&Math.abs(S.flapPos-S.flapSel)>.05;
+  if(powered)S.flapPos=approach(S.flapPos,S.flapSel,3,dt);
+  if(S.onGround&&!S.gearDown){S.gearDown=true;toast('Squat switch: the gear will not retract on the ground')}
+  const gT=S.gearDown?1:0;
+  S.gearMoving=powered&&Math.abs(S.gearPos-gT)>.001;
+  if(powered)S.gearPos=approach(S.gearPos,gT,1/6,dt);
+
+  // autopilot
+  let elev=S.elev, ail=S.ail;
+  if(S.ap.on){
+    if(!powered||S.onGround){apOff('Autopilot disconnected: no power')}
+    else if(Math.abs(S.elev)>.4||Math.abs(S.ail)>.4){apOff('Autopilot disconnected by control input')}
+    else if(S.stalled){apOff('Autopilot disconnected: stall')}
+    else{
+      const tb=S.ap.lat==='HDG'?clamp(angDiff(S.hdgBug,S.hdg)*1.2,-20,20):0;
+      ail=clamp((tb-S.bank)*.06-S.rollRate*.015,-.6,.6);
+      let tp=S.ap.pitchRef;
+      if(S.ap.vert==='ALT'){
+        const tvs=clamp((S.selAlt-S.altInd)*2.5,-700,700);
+        const lf=1/Math.max(.2,Math.cos(S.bank*D2R));
+        tp=alphaOf(S.ias,S.flapPos/30)*lf+Math.asin(clamp(tvs/(Math.max(S.ias,40)*101.27),-.3,.3))*R2D;
+        tp=clamp(tp,-10,12);
+      }
+      elev=clamp((tp-S.pitch)*.12,-.5,.5);
+      S.trim=ease(S.trim,S.pitch/10,3,dt);
+    }
+  }
+  if(S.apFlash>0)S.apFlash-=dt;
+
+  // flight dynamics
+  const flapF=S.flapPos/30;
+  const lf=1/Math.max(.2,Math.cos(S.bank*D2R));
+  const vStall=(48-6*flapF)*Math.sqrt(lf);
+  S.vStall=vStall;
+  const v=Math.max(S.ias,1);
+  const auth=clamp(v/60,.12,1.3);
+  const stalled=!S.onGround&&S.ias<vStall;
+  S.stalled=stalled;
+  const thrust=7*S.P*(1-v/300);
+  const para=.000261*v*v*(1+flapF*.6+S.gearPos*.25);
+
+  if(S.onGround){
+    let pr=S.ias>45&&elev>.05?elev*10:-3;
+    S.pitch=clamp(S.pitch+pr*dt,0,14);
+    S.bank=0;S.rollRate=0;
+    const alpha=alphaOf(v,flapF);
+    const gamma=S.pitch-alpha;
+    const roll=S.ias>.3?.35+(S.brakes?5:0):0;
+    S.ias=Math.max(0,S.ias+(thrust-para-roll)*dt);
+    if(S.ias<.3&&thrust<roll)S.ias=0;
+    const steer=clamp(S.ias/15,0,1)*20*S.rud;
+    S.turnRate=steer; S.hdg=wrap(S.hdg+steer*dt);
+    S.vs=0;S.alt=0;
+    if(gamma>.5&&S.ias>vStall+2){S.onGround=false;toast('Airborne')}
+  }else{
+    let pitchRate=elev*14*auth+(S.trim*10-S.pitch)*.35;
+    if(stalled)pitchRate-=8;
+    let rollRate=S.ail===ail?ail*50*clamp(v/60,.1,1.2):ail*50;
+    rollRate+=S.rud*4;
+    if(stalled)rollRate+=Math.sin(S.t*1.7)*8;
+    S.rollRate=rollRate;
+    S.pitch=clamp(S.pitch+pitchRate*dt,-40,40);
+    S.bank=clamp(S.bank+rollRate*dt,-85,85);
+    const alpha=alphaOf(v,flapF);
+    let gamma=S.pitch-alpha*lf;
+    if(stalled)gamma-=4+(vStall-S.ias)*.8;
+    gamma=clamp(gamma,-60,35);
+    const drag=para+.6*Math.pow(60/Math.max(v,30),2)*lf;
+    S.ias=Math.max(0,S.ias+(thrust-drag-19*Math.sin(gamma*D2R))*dt);
+    S.vs=S.ias*101.27*Math.sin(gamma*D2R);
+    S.alt+=S.vs/60*dt;
+    const tr=S.ias>20?1091*Math.tan(S.bank*D2R)/S.ias:0;
+    S.turnRate=clamp(tr+S.rud*3-ail*.8,-25,25);
+    S.hdg=wrap(S.hdg+S.turnRate*dt);
+    if(S.alt<=0)touchdown();
+  }
+  const slipT=S.onGround?-S.rud*.3*clamp(S.ias/30,0,1):clamp(-S.rud*.9+ail*.25,-1,1);
+  S.slip=ease(S.slip,slipT,.4,dt);
+
+  // air data (pitot-static)
+  let iasI=S.ias;
+  if(S.fail.pitot)iasI=S.frz.ias+(S.alt-S.frz.altP)*.012;
+  if(S.fail.static)iasI-=(S.alt-S.frz.altS)*.01;
+  S.iasInd=Math.max(0,iasI);
+  S.altInd=(S.fail.static?S.frz.altS:S.alt)+(S.baro-QNH)*1000;
+  S.vsInd=ease(S.vsInd,S.fail.static?0:S.vs,1.2,dt);
+}
+
+function touchdown(){
+  const why=[];
+  if(S.gearPos<.99)why.push('The gear was not down and locked.');
+  if(S.vs<-700)why.push(`Sink rate was ${fmt(-S.vs)} ft/min at touchdown. Keep it under about 700.`);
+  if(Math.abs(S.bank)>12)why.push(`A wing tip hit the ground at ${Math.round(Math.abs(S.bank))}° of bank.`);
+  if(S.pitch<-4)why.push('The nose wheel hit first in a nose-low attitude.');
+  if(why.length){S.crashed=true;S.alt=0;showCrash(why);return}
+  toast(`Touchdown at ${fmt(-S.vs)} ft/min`);
+  S.alt=0;S.vs=0;S.onGround=true;S.bank=0;S.pitch=Math.max(0,S.pitch);
+}
+
+/* ------------- canvases ------------- */
+const G={};
+document.querySelectorAll('canvas[data-g]').forEach(c=>{G[c.dataset.g]={c,ctx:c.getContext('2d'),lw:+(c.dataset.w||200),lh:+(c.dataset.h||200),sx:1,sy:1}});
+function fit(g){const r=g.c.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));if(g.c.width!==w||g.c.height!==h){g.c.width=w;g.c.height=h}g.sx=w/g.lw;g.sy=h/g.lh}
+const ro=new ResizeObserver(()=>Object.values(G).forEach(fit));Object.values(G).forEach(g=>ro.observe(g.c));
+Object.values(G).forEach(fit);
+
+const P=(a,r,cx=100,cy=100)=>[cx+r*Math.sin(a),cy-r*Math.cos(a)];
+function ln(x,a1,b1,a2,b2,w,col){x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(a1,b1);x.lineTo(a2,b2);x.stroke()}
+function tk(x,a,r1,r2,w,col){const[p,q]=P(a,r1),[s,t]=P(a,r2);ln(x,p,q,s,t,w,col)}
+function tx(x,t,X,Y,size,col,opt={}){x.fillStyle=col;x.font=`${opt.w||700} ${size}px ${opt.body?"'B612'":"'B612 Mono'"}, ui-monospace, monospace`;x.textAlign=opt.al||'center';x.textBaseline='middle';x.fillText(t,X,Y)}
+function band(x,a1,a2,r,w,col){x.strokeStyle=col;x.lineWidth=w;x.lineCap='butt';x.beginPath();x.arc(100,100,r,a1-Math.PI/2,a2-Math.PI/2);x.stroke()}
+function needle(x,a,len,tail,w,col){x.save();x.translate(100,100);x.rotate(a);x.fillStyle=col;x.beginPath();x.moveTo(-w/2,tail);x.lineTo(-w/2,-len+w*2);x.lineTo(0,-len);x.lineTo(w/2,-len+w*2);x.lineTo(w/2,tail);x.closePath();x.fill();x.restore()}
+function hub(x){x.fillStyle='#30363a';x.beginPath();x.arc(100,100,7,0,TAU);x.fill();x.fillStyle=C.bezel;x.beginPath();x.arc(100,100,2.5,0,TAU);x.fill()}
+function base(x){
+  x.clearRect(0,0,200,200);
+  const g=x.createRadialGradient(100,88,70,100,100,100);g.addColorStop(0,'#3b4246');g.addColorStop(1,'#070809');
+  x.fillStyle=g;x.beginPath();x.arc(100,100,99.5,0,TAU);x.fill();
+  x.fillStyle=C.face;x.beginPath();x.arc(100,100,90,0,TAU);x.fill();
+}
+function glass(x){const g=x.createLinearGradient(0,10,0,190);g.addColorStop(0,'rgba(255,255,255,.08)');g.addColorStop(.45,'rgba(255,255,255,0)');x.fillStyle=g;x.beginPath();x.arc(100,100,90,0,TAU);x.fill()}
+function flag(x,t,X,Y){x.fillStyle=C.red;x.fillRect(X-16,Y-8,32,16);x.strokeStyle='#fff';x.lineWidth=1;x.strokeRect(X-16,Y-8,32,16);tx(x,t,X,Y,10,'#fff')}
+
+function drawASI(x){
+  base(x);
+  const A=v=>(clamp(v,20,200)-20)/180*330*D2R;
+  band(x,A(40),A(85),76,5,C.ink);
+  band(x,A(48),A(129),84,7,C.green);
+  band(x,A(129),A(163),84,7,C.yellow);
+  tk(x,A(163),72,90,3,C.red);
+  for(let s=20;s<=200;s+=5){const m=s%10===0;tk(x,A(s),m?79:84,89,m?2:1,C.ink)}
+  for(let s=40;s<=200;s+=20){const[p,q]=P(A(s),62);tx(x,String(s),p,q,13,C.ink)}
+  tx(x,'KNOTS',100,74,8,C['ink-dim'],{body:1});
+  tx(x,'AIRSPEED',100,128,8,C['ink-dim'],{body:1});
+  needle(x,A(S.iasInd),82,16,4.5,C.ink);hub(x);glass(x);
+}
+
+function drawAI(x){
+  base(x);
+  const g=S.gyro;
+  const pitch=lerp(S.pitch,S.pitch*.3-8+Math.sin(S.t*.3)*4,1-g);
+  const bank=lerp(S.bank,28+Math.sin(S.t*.21)*12,1-g);
+  x.save();x.beginPath();x.arc(100,100,88,0,TAU);x.clip();
+  x.translate(100,100);x.rotate(-bank*D2R);
+  x.save();const ppd=2.6;x.translate(0,clamp(pitch,-30,30)*ppd);
+  x.fillStyle=C.sky;x.fillRect(-200,-400,400,400);
+  x.fillStyle=C.ground;x.fillRect(-200,0,400,400);
+  ln(x,-200,0,200,0,2,C.ink);
+  for(const p of[-20,-15,-10,-5,5,10,15,20]){const y=-p*ppd,h=p%10===0?22:11;ln(x,-h,y,h,y,1.5,C.ink);if(p%10===0){tx(x,String(Math.abs(p)),-h-9,y,8,C.ink);tx(x,String(Math.abs(p)),h+9,y,8,C.ink)}}
+  x.restore();
+  // sky pointer on card
+  x.fillStyle=C.ink;x.beginPath();x.moveTo(0,-77);x.lineTo(-6,-67);x.lineTo(6,-67);x.closePath();x.fill();
+  x.restore();
+  // fixed bank scale
+  x.save();x.beginPath();x.arc(100,100,88,0,TAU);x.clip();
+  for(const b of[-60,-30,-20,-10,10,20,30,60]){const big=Math.abs(b)===30||Math.abs(b)===60;tk(x,b*D2R,big?76:80,89,big?3:2,C.ink)}
+  for(const b of[-45,45]){const[p,q]=P(b*D2R,82);x.fillStyle=C.ink;x.beginPath();x.arc(p,q,2.5,0,TAU);x.fill()}
+  x.restore();
+  x.fillStyle=C.amber;x.beginPath();x.moveTo(100,13);x.lineTo(94,4);x.lineTo(106,4);x.closePath();x.fill();
+  // aircraft symbol
+  x.fillStyle=C.amber;
+  x.fillRect(58,99,28,4);x.fillRect(114,99,28,4);
+  x.beginPath();x.moveTo(86,99);x.lineTo(100,108);x.lineTo(114,99);x.lineTo(114,103);x.lineTo(100,112);x.lineTo(86,103);x.closePath();x.fill();
+  x.beginPath();x.arc(100,101,3,0,TAU);x.fill();
+  ln(x,100,112,100,150,3,C.amber);
+  x.fillStyle='#2b3034';x.fillRect(80,150,40,10);
+  if(g<.6)flag(x,'GYRO',100,170);
+  glass(x);
+}
+
+function drawALT(x){
+  base(x);
+  const a=S.altInd;
+  for(let i=0;i<50;i++){const ang=i/50*TAU,m=i%5===0;tk(x,ang,m?78:84,89,m?2:1,C.ink)}
+  for(let i=0;i<10;i++){const[p,q]=P(i/10*TAU,66);tx(x,String(i),p,q,15,C.ink)}
+  // kollsman window
+  x.fillStyle=C.bezel;x.fillRect(122,93,40,15);x.strokeStyle=C['ink-faint'];x.lineWidth=1;x.strokeRect(122,93,40,15);
+  tx(x,S.baro.toFixed(2),142,100.5,10,C.ink);
+  tx(x,'ALT',100,58,8,C['ink-dim'],{body:1});
+  tx(x,'100 FEET',100,132,8,C['ink-dim'],{body:1});
+  tx(x,'IN HG',142,115,7,C['ink-dim'],{body:1});
+  // low altitude hatch
+  if(a<10000){x.save();x.beginPath();x.rect(86,68,28,10);x.clip();x.fillStyle=C.ink;x.fillRect(86,68,28,10);x.strokeStyle=C.bezel;x.lineWidth=3;for(let k=-20;k<40;k+=7){x.beginPath();x.moveTo(86+k,78);x.lineTo(96+k,68);x.stroke()}x.restore()}
+  const h10=a/100000*TAU,h1=(a%10000)/10000*TAU,h100=(a%1000)/1000*TAU;
+  // 10,000 pointer with triangle
+  x.save();x.translate(100,100);x.rotate(h10);ln(x,0,0,0,-80,1.5,C.ink);x.fillStyle=C.ink;x.beginPath();x.moveTo(0,-90);x.lineTo(-5,-80);x.lineTo(5,-80);x.closePath();x.fill();x.restore();
+  needle(x,h1,48,10,8,C.ink);
+  needle(x,h100,78,14,4,C.ink);
+  hub(x);glass(x);
+}
+
+function drawTC(x){
+  base(x);
+  const g=S.tcGyro;
+  // marks: wings level at ±90°, standard-rate marks 20° below
+  for(const s of[-1,1])tk(x,90*s*D2R,64,86,3,C.ink);
+  x.save();x.translate(100,100);
+  for(const s of[-1,1]){x.save();x.rotate(s*20*D2R);ln(x,s*64,0,s*86,0,3,C.ink);x.restore()}
+  x.restore();
+  tx(x,'L',30,128,11,C.ink);tx(x,'R',170,128,11,C.ink);
+  tx(x,'TURN COORDINATOR',100,40,7,C['ink-dim'],{body:1});
+  tx(x,'2 MIN',100,165,8,C.ink);
+  tx(x,'NO PITCH',100,176,6,C['ink-dim'],{body:1});
+  tx(x,'INFORMATION',100,183,6,C['ink-dim'],{body:1});
+  // ball tube
+  const cy=-12,R=142;
+  x.strokeStyle=C['ink-faint'];x.lineCap='round';x.lineWidth=17;x.beginPath();x.arc(100,cy,R,(90-11)*D2R,(90+11)*D2R);x.stroke();
+  x.strokeStyle='#cfd6d8';x.lineWidth=14;x.beginPath();x.arc(100,cy,R,(90-11)*D2R,(90+11)*D2R);x.stroke();x.lineCap='butt';
+  for(const s of[-1,1]){const a=(90+s*3.3)*D2R;ln(x,100+(R-8)*Math.cos(a),cy+(R-8)*Math.sin(a),100+(R+8)*Math.cos(a),cy+(R+8)*Math.sin(a),1.5,C.bezel)}
+  const ba=(90-clamp(S.slip,-1,1)*9)*D2R;
+  x.fillStyle=C.bezel;x.beginPath();x.arc(100+R*Math.cos(ba),cy+R*Math.sin(ba),6,0,TAU);x.fill();
+  // airplane
+  const rate=g*(S.turnRate+S.rollRate*.06);
+  const rot=clamp(rate/3*20,-45,45)*g;
+  x.save();x.translate(100,98);x.rotate(rot*D2R);x.fillStyle=C.ink;
+  x.fillRect(-58,-2,116,4);x.beginPath();x.arc(0,0,8,0,TAU);x.fill();x.fillRect(-2,-16,4,12);x.fillRect(-12,8,24,3);
+  x.restore();
+  if(g<.7)flag(x,'OFF',60,72);
+  glass(x);
+}
+
+function drawHI(x){
+  base(x);
+  const h=wrap(S.hdg+S.hiDrift);
+  x.save();x.translate(100,100);x.rotate(-h*D2R);
+  for(let d=0;d<360;d+=5){const m=d%10===0;x.save();x.rotate(d*D2R);ln(x,0,-89,0,m?-79:-84,m?2:1,C.ink);
+    if(d%30===0){const t=d===0?'N':d===90?'E':d===180?'S':d===270?'W':String(d/10);tx(x,t,0,-68,d%90===0?15:12,C.ink)}x.restore()}
+  // bug
+  x.save();x.rotate(S.hdgBug*D2R);x.fillStyle=C.amber;x.beginPath();x.moveTo(-8,-90);x.lineTo(8,-90);x.lineTo(8,-82);x.lineTo(3,-82);x.lineTo(0,-86);x.lineTo(-3,-82);x.lineTo(-8,-82);x.closePath();x.fill();x.restore();
+  x.restore();
+  for(const a of[45,135,225,315])tk(x,a*D2R,88,96,2.5,C.ink);
+  x.fillStyle=C.amber;x.beginPath();x.moveTo(100,22);x.lineTo(95,11);x.lineTo(105,11);x.closePath();x.fill();
+  // airplane
+  x.fillStyle=C.ink;x.fillRect(98,72,4,52);x.fillRect(74,92,52,5);x.fillRect(88,118,24,4);
+  x.beginPath();x.arc(100,74,3,0,TAU);x.fill();
+  if(S.gyro<.6)flag(x,'GYRO',100,150);
+  glass(x);
+}
+
+function drawVSI(x){
+  base(x);
+  const A=v=>(-90+clamp(v,-2000,2000)/2000*170)*D2R;
+  for(let v=-2000;v<=2000;v+=100){const m=v%500===0;tk(x,A(v),m?77:83,89,m?2:1,C.ink)}
+  for(const v of[0,500,1000,1500,2000]){for(const s of v?[1,-1]:[1]){const[p,q]=P(A(v*s),64);tx(x,v===0?'0':String(v/1000).replace(/^0/,''),p,q,v%1000===0?14:11,C.ink)}}
+  tx(x,'UP',62,64,9,C['ink-dim'],{body:1});
+  tx(x,'DOWN',66,138,9,C['ink-dim'],{body:1});
+  tx(x,'VERTICAL SPEED',112,90,7,C['ink-dim'],{body:1});
+  tx(x,'FT/MIN × 1000',112,112,7,C['ink-dim'],{body:1});
+  needle(x,A(S.vsInd),82,16,4.5,C.ink);hub(x);glass(x);
+}
+
+function drawTach(x){
+  base(x);
+  const A=r=>(-135+clamp(r,0,3500)/3500*270)*D2R;
+  band(x,A(2100),A(2700),84,7,C.green);
+  tk(x,A(2700),74,90,3,C.red);
+  for(let r=0;r<=3500;r+=100){const m=r%500===0;tk(x,A(r),m?78:84,89,m?2:1,C.ink)}
+  for(let r=0;r<=35;r+=5){const[p,q]=P(A(r*100),64);tx(x,String(r),p,q,13,C.ink)}
+  tx(x,'RPM',100,62,8,C['ink-dim'],{body:1});
+  tx(x,'× 100',100,72,7,C['ink-dim'],{body:1});
+  x.fillStyle=C.bezel;x.fillRect(72,128,56,16);tx(x,S.tach.toFixed(1).padStart(6,'0'),100,136,10,C.ink);
+  tx(x,'HOURS',100,152,7,C['ink-dim'],{body:1});
+  needle(x,A(S.rpm),80,14,4.5,C.ink);hub(x);glass(x);
+}
+
+function drawPFD(x){
+  const W=640,H=480;
+  x.fillStyle='#000';x.fillRect(0,0,W,H);
+  if(!(S.powered&&S.sw.avionics)){
+    tx(x,'NO POWER',320,226,18,C['ink-faint']);
+    tx(x,'Turn on BATTERY and AVIONICS',320,254,12,C['ink-faint'],{body:1,w:400});
+    return;
+  }
+  const cx=320,cy=215,ppd=7;
+  x.save();x.translate(cx,cy);x.rotate(-S.bank*D2R);x.translate(0,S.pitch*ppd);
+  let g=x.createLinearGradient(0,-500,0,0);g.addColorStop(0,'#0b3a80');g.addColorStop(1,C.sky);x.fillStyle=g;x.fillRect(-900,-1500,1800,1500);
+  g=x.createLinearGradient(0,0,0,500);g.addColorStop(0,C.ground);g.addColorStop(1,'#4a2e13');x.fillStyle=g;x.fillRect(-900,0,1800,1500);
+  ln(x,-900,0,900,0,2,'#fff');
+  x.save();x.beginPath();x.rect(-110,-S.pitch*ppd-135,220,270);x.clip();
+  for(let p=-50;p<=50;p+=2.5){if(p===0)continue;const y=-p*ppd,w=p%10===0?60:p%5===0?30:12;ln(x,-w,y,w,y,1.5,'#fff');if(p%10===0){tx(x,String(Math.abs(p)),-w-14,y,12,'#fff');tx(x,String(Math.abs(p)),w+14,y,12,'#fff')}}
+  x.restore();x.restore();
+
+  // roll scale
+  x.save();x.translate(cx,cy);const R=150;
+  x.strokeStyle='#fff';x.lineWidth=2;x.beginPath();x.arc(0,0,R,-150*D2R,-30*D2R);x.stroke();
+  for(const b of[-60,-45,-30,-20,-10,10,20,30,45,60]){const a=b*D2R,l=Math.abs(b)%30===0?16:9;ln(x,R*Math.sin(a),-R*Math.cos(a),(R+l)*Math.sin(a),-(R+l)*Math.cos(a),2,'#fff')}
+  x.fillStyle='#fff';x.beginPath();x.moveTo(0,-R);x.lineTo(-8,-R-14);x.lineTo(8,-R-14);x.closePath();x.fill();
+  x.rotate(-S.bank*D2R);
+  x.fillStyle=C.yellow;x.beginPath();x.moveTo(0,-R+2);x.lineTo(-9,-R+16);x.lineTo(9,-R+16);x.closePath();x.fill();
+  const so=clamp(S.slip,-1,1)*16;x.beginPath();x.moveTo(-10+so,-R+19);x.lineTo(10+so,-R+19);x.lineTo(12+so,-R+25);x.lineTo(-12+so,-R+25);x.closePath();x.fill();
+  x.restore();
+
+  // aircraft symbol
+  x.fillStyle=C.yellow;x.strokeStyle='#000';x.lineWidth=1.5;
+  x.beginPath();x.rect(cx-130,cy-3,70,7);x.fill();x.stroke();
+  x.beginPath();x.rect(cx+60,cy-3,70,7);x.fill();x.stroke();
+  x.beginPath();x.moveTo(cx,cy);x.lineTo(cx-44,cy+20);x.lineTo(cx-26,cy+20);x.lineTo(cx,cy+9);x.lineTo(cx+26,cy+20);x.lineTo(cx+44,cy+20);x.closePath();x.fill();x.stroke();
+
+  // speed tape
+  const sx=36,sw=82,ty=55,th=320,ppk=4,v=S.iasInd;
+  x.fillStyle='rgba(15,18,21,.6)';x.fillRect(sx,ty,sw,th);
+  x.save();x.beginPath();x.rect(sx,ty,sw,th);x.clip();
+  const bd=(a,b,X,Wd,col)=>{const y1=cy-(b-v)*ppk,y2=cy-(a-v)*ppk;x.fillStyle=col;x.fillRect(X,y1,Wd,y2-y1)};
+  bd(20,40,sx+sw-7,7,C.red);bd(48,129,sx+sw-7,7,C.green);bd(129,163,sx+sw-7,7,C.yellow);bd(163,300,sx+sw-7,7,C.red);bd(40,85,sx+sw-13,4,'#fff');
+  for(let s=Math.floor((v-45)/5)*5;s<=v+45;s+=5){if(s<20)continue;const y=cy-(s-v)*ppk;ln(x,sx+sw-(s%10?20:26),y,sx+sw-14,y,2,'#fff');if(s%10===0)tx(x,String(s),sx+sw-30,y,14,'#fff',{al:'right'})}
+  x.restore();
+  x.fillStyle='#000';x.strokeStyle='#fff';x.lineWidth=1.5;
+  x.beginPath();x.moveTo(sx+2,cy-18);x.lineTo(sx+sw-14,cy-18);x.lineTo(sx+sw-14,cy-8);x.lineTo(sx+sw-4,cy);x.lineTo(sx+sw-14,cy+8);x.lineTo(sx+sw-14,cy+18);x.lineTo(sx+2,cy+18);x.closePath();x.fill();x.stroke();
+  tx(x,String(Math.round(v)),sx+sw-20,cy+1,22,v>163?C.red:'#fff',{al:'right'});
+  tx(x,'KT',sx+sw/2,ty+th+12,11,C['ink-dim']);
+
+  // altitude tape
+  const ax=500,aw=82,ppf=.4,a=S.altInd;
+  x.fillStyle='rgba(15,18,21,.6)';x.fillRect(ax,ty,aw,th);
+  x.save();x.beginPath();x.rect(ax,ty,aw,th);x.clip();
+  for(let f=Math.floor((a-420)/20)*20;f<=a+420;f+=20){const y=cy-(f-a)*ppf;const m=f%100===0;ln(x,ax,y,ax+(m?14:7),y,2,'#fff');if(m)tx(x,String(f),ax+20,y,13,'#fff',{al:'left'})}
+  const by=clamp(cy-(S.selAlt-a)*ppf,ty+6,ty+th-6);
+  x.fillStyle=C.cyan;x.fillRect(ax,by-10,6,20);x.fillRect(ax+6,by-10,4,6);x.fillRect(ax+6,by+4,4,6);
+  x.restore();
+  x.fillStyle='#000';x.strokeStyle='#fff';
+  x.beginPath();x.moveTo(ax+aw,cy-18);x.lineTo(ax+12,cy-18);x.lineTo(ax+12,cy-8);x.lineTo(ax+2,cy);x.lineTo(ax+12,cy+8);x.lineTo(ax+12,cy+18);x.lineTo(ax+aw,cy+18);x.closePath();x.fill();x.stroke();
+  tx(x,fmt(Math.round(a/10)*10),ax+aw-6,cy+1,19,'#fff',{al:'right'});
+  x.fillStyle='#000';x.fillRect(ax,ty-28,aw,24);x.strokeStyle=C.cyan;x.strokeRect(ax,ty-28,aw,24);
+  tx(x,fmt(S.selAlt),ax+aw/2,ty-16,15,C.cyan);
+  x.fillStyle='#000';x.fillRect(ax,ty+th+2,aw,22);x.strokeStyle='#fff';x.strokeRect(ax,ty+th+2,aw,22);
+  tx(x,S.baro.toFixed(2)+'IN',ax+aw/2,ty+th+13,13,C.cyan);
+
+  // vertical speed
+  const vx=590,vw=36,pp=120/2000,vs=S.vsInd;
+  x.fillStyle='rgba(15,18,21,.6)';x.fillRect(vx,cy-130,vw,260);
+  for(let f=-2000;f<=2000;f+=500){const y=cy-f*pp;ln(x,vx,y,vx+(f%1000?6:10),y,2,'#fff');if(f%1000===0&&f!==0)tx(x,String(Math.abs(f/1000)),vx+18,y,12,'#fff')}
+  const vy=cy-clamp(vs,-2000,2000)*pp;
+  x.fillStyle=C.bezel;x.strokeStyle='#fff';x.beginPath();x.moveTo(vx+2,vy);x.lineTo(vx+10,vy-9);x.lineTo(vx+vw+12,vy-9);x.lineTo(vx+vw+12,vy+9);x.lineTo(vx+10,vy+9);x.closePath();x.fill();x.stroke();
+  if(Math.abs(vs)>=100)tx(x,String(Math.round(vs/50)*50),vx+vw/2+6,vy+1,10,'#fff');
+
+  // heading tape
+  const hx=150,hw=340,hy=402,hh=44,ppdh=4,h=S.hdg;
+  x.fillStyle='rgba(15,18,21,.8)';x.fillRect(hx,hy,hw,hh);
+  x.save();x.beginPath();x.rect(hx,hy,hw,hh);x.clip();
+  for(let d=Math.floor((h-45)/5)*5;d<=h+45;d+=5){const X=320+(d-h)*ppdh,dd=wrap(d);ln(x,X,hy,X,hy+(dd%10?7:13),2,'#fff');
+    if(dd%10===0){const t=dd%90===0?'NESW'[dd/90]:String(dd/10);tx(x,t,X,hy+27,dd%90===0?16:13,'#fff')}}
+  const bx=320+clamp(angDiff(S.hdgBug,h),-42,42)*ppdh;x.fillStyle=C.cyan;x.fillRect(bx-9,hy,18,5);x.fillRect(bx-9,hy+5,5,4);x.fillRect(bx+4,hy+5,5,4);
+  x.restore();
+  x.fillStyle='#000';x.strokeStyle='#fff';x.beginPath();x.moveTo(290,372);x.lineTo(350,372);x.lineTo(350,394);x.lineTo(326,394);x.lineTo(320,402);x.lineTo(314,394);x.lineTo(290,394);x.closePath();x.fill();x.stroke();
+  tx(x,pad3(h)+'°',320,384,15,'#fff');
+  tx(x,'HDG',100,416,11,C['ink-dim']);tx(x,pad3(S.hdgBug)+'°',100,434,15,C.cyan);
+  tx(x,'FLAPS',540,416,11,C['ink-dim']);tx(x,Math.round(S.flapPos)+'°',540,434,15,'#fff');
+
+  // mode bar
+  x.fillStyle='#0a0c0d';x.fillRect(0,0,W,26);
+  x.strokeStyle='#2c3236';x.beginPath();x.moveTo(0,26.5);x.lineTo(W,26.5);x.stroke();
+  if(S.ap.on){tx(x,'AP',40,14,14,C.green);tx(x,S.ap.lat,200,14,14,C.green);tx(x,S.ap.vert==='ALT'?'ALT '+fmt(S.selAlt):'PIT',440,14,14,C.green)}
+  else if(S.apFlash>0&&Math.floor(S.apFlash*3)%2===0)tx(x,'AP',40,14,14,C.yellow);
+  tx(x,S.onGround?'ON GROUND':'GPS · NAV OFF',600,14,10,C['ink-dim'],{al:'right'});
+  // warnings
+  const warn=[];
+  if(S.stallWarn)warn.push(['STALL',C.red]);
+  if(S.ias>163)warn.push(['OVERSPEED',C.red]);
+  if(S.gearWarn)warn.push(['GEAR',C.red]);
+  if(S.fail.pitot||S.fail.static)warn.push(['AIR DATA?',C.yellow]);
+  warn.forEach(([t,col],i)=>{const Y=320+i*28,w2=t.length*10+20;x.fillStyle=col;x.fillRect(320-w2/2,Y-11,w2,22);tx(x,t,320,Y+1,14,'#000')});
+}
+
+/* ------------- UI building ------------- */
+const barsDef=[
+  {k:'fuelL',l:'Fuel L',u:'gal',min:0,max:26,segs:[[0,5,'red'],[5,26,'green']],v:()=>S.fuelL,d:1},
+  {k:'fuelR',l:'Fuel R',u:'gal',min:0,max:26,segs:[[0,5,'red'],[5,26,'green']],v:()=>S.fuelR,d:1},
+  {k:'oilP',l:'Oil pres',u:'psi',min:0,max:115,segs:[[0,20,'red'],[20,50,'yellow'],[50,90,'green'],[90,100,'yellow'],[100,115,'red']],v:()=>S.oilP,d:0},
+  {k:'oilT',l:'Oil temp',u:'°F',min:75,max:250,segs:[[100,245,'green'],[245,250,'red']],v:()=>S.oilT,d:0},
+  {k:'egt',l:'EGT',u:'°F',min:1000,max:1600,segs:[],v:()=>S.egt,d:0},
+  {k:'vac',l:'Suction',u:'inHg',min:3,max:7,segs:[[3,4.5,'yellow'],[4.5,5.5,'green'],[5.5,7,'yellow']],v:()=>S.vac,d:1},
+  {k:'volts',l:'Volts',u:'V',min:20,max:32,segs:[[20,24,'red'],[24,25.5,'yellow'],[25.5,29.5,'green'],[29.5,32,'red']],v:()=>S.busV,d:1},
+  {k:'amps',l:'Amps',u:'A',min:-40,max:40,segs:[[-40,0,'yellow'],[0,40,'green']],v:()=>S.amps,d:0},
+];
+const barEls={};
+const barsBox=$('#bars');
+barsDef.forEach(b=>{
+  const el=document.createElement('div');el.className='bg';
+  el.innerHTML=`<div class="h"><span>${b.l}</span><b>—</b></div><div class="track">${b.segs.map(([a,c,col])=>`<i class="s" style="left:${(a-b.min)/(b.max-b.min)*100}%;width:${(c-a)/(b.max-b.min)*100}%;background:var(--${col});opacity:.75"></i>`).join('')}<i class="m"></i></div>`;
+  barsBox.appendChild(el);barEls[b.k]={val:el.querySelector('b'),m:el.querySelector('.m'),b};
+});
+
+const swDef=[['bat','Battery'],['alt','Alternator'],['avionics','Avionics'],['pump','Fuel pump'],['beacon','Beacon'],['nav','Nav lights'],['strobe','Strobe'],['land','Landing light'],['taxi','Taxi light'],['pitot','Pitot heat']];
+const swBox=$('#switches'),swEls={};
+swDef.forEach(([k,l])=>{const b=document.createElement('button');b.type='button';b.className='sw'+(k==='bat'||k==='alt'?' red':'');b.innerHTML=`<span class="rk"></span><b>${l}</b>`;b.addEventListener('click',()=>{S.sw[k]=!S.sw[k]});swBox.appendChild(b);swEls[k]=b});
+
+const annDef=[
+  ['volts','LOW VOLTS','red',()=>S.sw.bat&&S.busV<25],
+  ['oil','OIL PRESS','red',()=>S.oilP<20],
+  ['fuelL','L LOW FUEL','amber',()=>S.fuelL<5],
+  ['fuelR','R LOW FUEL','amber',()=>S.fuelR<5],
+  ['vac','VACUUM','amber',()=>S.vac<3.5],
+  ['stall','STALL','red',()=>S.stallWarn],
+  ['gearU','GEAR UNSAFE','red',()=>S.gearPos>.001&&S.gearPos<.999],
+  ['gearW','GEAR UP','red',()=>S.gearWarn],
+  ['flap','FLAP SPEED','amber',()=>(S.flapPos>10.5&&S.ias>85)||(S.flapPos>.5&&S.ias>110)],
+  ['vne','OVERSPEED','red',()=>S.ias>163],
+  ['start','STARTER','amber',()=>S.mag==='START'],
+  ['pitot','PITOT HT OFF','amber',()=>!S.sw.pitot&&!S.onGround],
+  ['ap','AP DISC','amber',()=>S.apFlash>0],
+  ['apOn','AP','green',()=>S.ap.on],
+];
+const annBox=$('#anns'),annEls={};let annTest=false;
+annDef.forEach(([k,t,col])=>{const d=document.createElement('div');d.className='ann '+col;d.textContent=t;annBox.appendChild(d);annEls[k]=d});
+const testBtn=$('#annTest');
+testBtn.addEventListener('pointerdown',()=>annTest=true);
+['pointerup','pointerleave','pointercancel'].forEach(ev=>testBtn.addEventListener(ev,()=>annTest=false));
+testBtn.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter')annTest=true});
+testBtn.addEventListener('keyup',()=>annTest=false);
+
+const failDef=[
+  ['vac','Vacuum pump','Attitude and heading gyros spin down and drift. The PFD keeps working.'],
+  ['alt','Alternator','Battery carries the load. Watch volts drop and amps go negative. Shed electrical load.'],
+  ['pitot','Pitot tube blocked','Airspeed acts like an altimeter: it reads high in a climb and low in a descent.'],
+  ['static','Static port blocked','Altimeter freezes, vertical speed reads zero, airspeed reads low in a climb.'],
+];
+const failBox=$('#fails'),failEls={};
+failDef.forEach(([k,t,d])=>{const l=document.createElement('label');l.innerHTML=`<input type="checkbox" id="fail-${k}"><div><b>${t}</b><span>${d}</span></div>`;
+  const cb=l.querySelector('input');cb.addEventListener('change',()=>{S.fail[k]=cb.checked;if(k==='pitot'){S.frz.ias=S.iasInd;S.frz.altP=S.alt}if(k==='static'){S.frz.altS=S.alt}toast(`${t} ${cb.checked?'failed':'restored'}`)});
+  failBox.appendChild(l);failEls[k]=cb});
+
+function segBind(id,get,set){const box=$(id);box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>set(b.dataset.v)));return()=>{const cur=String(get());box.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===cur)))}}
+const syncFlaps=segBind('#flaps',()=>S.flapSel,v=>setFlaps(+v));
+const syncFuel=segBind('#fuelSel',()=>S.fuelSel,v=>S.fuelSel=v);
+const magBox=$('#mags');
+magBox.querySelectorAll('button').forEach(b=>{
+  if(b.dataset.v==='START'){
+    b.addEventListener('pointerdown',e=>{S.mag='START';b.setPointerCapture(e.pointerId)});
+    ['pointerup','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>{if(S.mag==='START')S.mag='BOTH'}));
+    b.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();S.mag='START'}});
+    b.addEventListener('keyup',()=>{if(S.mag==='START')S.mag='BOTH'});
+  }else b.addEventListener('click',()=>S.mag=b.dataset.v);
+});
+const syncMags=()=>magBox.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===S.mag)));
+
+function setFlaps(v){S.flapSel=clamp(v,0,30);if(!S.powered)toast('Flaps are electric: no power on the bus')}
+function toggleGear(){if(S.onGround&&S.gearDown){toast('Squat switch: the gear will not retract on the ground');return}S.gearDown=!S.gearDown;if(!S.powered)toast('Gear motor needs power on the bus')}
+$('#gearLever').addEventListener('click',toggleGear);
+let brakeBtnHeld=false;const bb=$('#brakes');
+bb.addEventListener('pointerdown',e=>{brakeBtnHeld=true;bb.setPointerCapture(e.pointerId)});
+['pointerup','pointercancel'].forEach(ev=>bb.addEventListener(ev,()=>brakeBtnHeld=false));
+
+let trimRep=null;
+function trimHold(btn,dir){btn.addEventListener('pointerdown',e=>{btn.setPointerCapture(e.pointerId);S.trim=clamp(S.trim+dir*.02,-1,1);clearInterval(trimRep);trimRep=setInterval(()=>S.trim=clamp(S.trim+dir*.02,-1,1),80)});['pointerup','pointercancel'].forEach(ev=>btn.addEventListener(ev,()=>clearInterval(trimRep)));btn.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();S.trim=clamp(S.trim+dir*.03,-1,1)}})}
+trimHold($('#trimDn'),-1);trimHold($('#trimUp'),1);
+
+function knobAct(k,mult=1){
+  if(k==='baro-')S.baro=+clamp(S.baro-.01*mult,28,31).toFixed(2);
+  if(k==='baro+')S.baro=+clamp(S.baro+.01*mult,28,31).toFixed(2);
+  if(k==='hdg-')S.hdgBug=wrap(Math.round(S.hdgBug-1*mult));
+  if(k==='hdg+')S.hdgBug=wrap(Math.round(S.hdgBug+1*mult));
+  if(k==='sel-')S.selAlt=clamp(S.selAlt-100*mult,0,17500);
+  if(k==='sel+')S.selAlt=clamp(S.selAlt+100*mult,0,17500);
+  if(k==='sync'){S.hiDrift=0;toast('Heading indicator synced to compass')}
+}
+document.querySelectorAll('[data-k]').forEach(b=>{let rep=null,to=null;
+  if(b.dataset.k==='sync'){b.addEventListener('click',()=>knobAct('sync'));return}
+  b.addEventListener('pointerdown',e=>{b.setPointerCapture(e.pointerId);knobAct(b.dataset.k);to=setTimeout(()=>rep=setInterval(()=>knobAct(b.dataset.k,b.dataset.k.startsWith('hdg')?5:1),90),350)});
+  ['pointerup','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>{clearTimeout(to);clearInterval(rep)}));
+  b.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();knobAct(b.dataset.k)}});
+});
+G.alt.c.addEventListener('wheel',e=>{e.preventDefault();knobAct(e.deltaY<0?'baro+':'baro-')},{passive:false});
+G.hi.c.addEventListener('wheel',e=>{e.preventDefault();knobAct(e.deltaY<0?'hdg+':'hdg-',e.shiftKey?10:1)},{passive:false});
+
+function toggleAP(){
+  if(S.ap.on){apOff('Autopilot disconnected');return}
+  if(!S.powered){toast('Autopilot needs power on the bus');return}
+  if(S.onGround){toast('Autopilot is for use in flight');return}
+  S.ap.on=true;S.ap.lat='ROL';S.ap.vert='PIT';S.ap.pitchRef=S.pitch;toast('Autopilot engaged: wings level, pitch hold');
+}
+function apMode(m){
+  if(!S.ap.on){toggleAP();if(!S.ap.on)return}
+  if(m==='HDG')S.ap.lat=S.ap.lat==='HDG'?'ROL':'HDG';
+  if(m==='ALT'){S.ap.vert=S.ap.vert==='ALT'?'PIT':'ALT';S.ap.pitchRef=S.pitch}
+}
+function apOff(msg){S.ap.on=false;S.ap.lat='ROL';S.ap.vert='PIT';S.apFlash=3;toast(msg)}
+$('#apBtn').addEventListener('click',toggleAP);
+$('#hdgBtn').addEventListener('click',()=>apMode('HDG'));
+$('#altBtn').addEventListener('click',()=>apMode('ALT'));
+
+let toastT=null;const toastEl=$('#toast');
+function toast(m){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>toastEl.hidden=true,2600)}
+
+function showCrash(why){$('#crashList').innerHTML=why.map(w=>`<li>${w}</li>`).join('');$('#crash').hidden=false}
+$('#crashReset').addEventListener('click',()=>load(scenario));
+
+function togglePause(){paused=!paused;$('#pause').setAttribute('aria-pressed',String(paused));$('#pause').textContent=paused?'Paused':'Pause'}
+$('#pause').addEventListener('click',togglePause);
+$('#reset').addEventListener('click',()=>load(scenario));
+$('#scn').addEventListener('change',e=>load(e.target.value));
+
+function load(kind){
+  scenario=kind;S=make(kind);
+  thrEl.value=Math.round(S.thr*100);mixEl.value=Math.round(S.mix*100);rudEl.value=0;
+  Object.entries(failEls).forEach(([k,cb])=>cb.checked=false);
+  $('#crash').hidden=true;
+  S.powered=S.busV>18;
+  if(kind==='ground')toast('Cold and dark. Battery on, fuel BOTH, mixture rich, throttle a little, then hold START.');
+}
+
+/* ------------- UI refresh ------------- */
+function updateUI(){
+  thrEl.value=Math.round(S.thr*100);$('#thrV').textContent=Math.round(S.thr*100)+'%';
+  $('#mixV').textContent=S.mix<.12?'Cut-off':Math.round(S.mix*100)+'%';
+  $('#rudV').textContent=Math.round(S.rud*100);
+  syncFlaps();syncFuel();syncMags();
+  $('#flapV').textContent=`Position ${Math.round(S.flapPos)}°`;
+  $('#trimI').style.top=`calc(${50-S.trim*45}% - 2px)`;
+  const gl=$('#gearLever');gl.setAttribute('aria-pressed',String(S.gearDown));
+  const down=S.gearPos>=.999&&S.powered, transit=S.gearPos>.001&&S.gearPos<.999&&S.powered;
+  ['#g1','#g2','#g3'].forEach(id=>{const e=$(id);e.className='lt'+(down?' g':transit?' r':'')});
+  $('#gearV').textContent=S.gearPos>=.999?'DOWN':S.gearPos<=.001?'UP':'IN TRANSIT';
+  bb.setAttribute('aria-pressed',String(S.brakes));
+  for(const k in swEls)swEls[k].setAttribute('aria-pressed',String(S.sw[k]));
+  for(const k in barEls){const{val,m,b}=barEls[k];const v=b.v();val.textContent=`${v.toFixed(b.d)} ${b.u}`;m.style.left=clamp((v-b.min)/(b.max-b.min)*100,0,100)+'%'}
+  $('#ffV').textContent=`Fuel flow ${S.gph.toFixed(1)} gph`;
+  $('#busV').textContent=S.powered?`Bus ${S.busV.toFixed(1)} V`:'Bus dead';
+  const lit=S.powered||annTest;
+  annDef.forEach(([k,,,f])=>{const on=annTest?S.powered:(lit&&f());annEls[k].classList.toggle('on',!!on);annEls[k].classList.toggle('flash',!!on&&(k==='stall'||k==='gearW'||k==='ap')&&!annTest)});
+  $('#apBtn').setAttribute('aria-pressed',String(S.ap.on));
+  $('#hdgBtn').setAttribute('aria-pressed',String(S.ap.on&&S.ap.lat==='HDG'));
+  $('#altBtn').setAttribute('aria-pressed',String(S.ap.on&&S.ap.vert==='ALT'));
+  $('#apState').textContent=S.ap.on?`${S.ap.lat} · ${S.ap.vert==='ALT'?'ALT '+fmt(S.selAlt):'PIT '+S.ap.pitchRef.toFixed(1)+'°'}`:'Disengaged';
+  $('#baroOut').textContent=S.baro.toFixed(2);
+  $('#bugOut').textContent=$('#bugOut2').textContent=pad3(S.hdgBug)+'°';
+  $('#selOut').textContent=fmt(S.selAlt);
+  const m=Math.floor(S.t/60),s=Math.floor(S.t%60);$('#clock').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+/* ------------- loop ------------- */
+function render(){
+  const draw=(k,f)=>{const g=G[k];g.ctx.setTransform(g.sx,0,0,g.sy,0,0);f(g.ctx)};
+  draw('pfd',drawPFD);draw('asi',drawASI);draw('ai',drawAI);draw('alt',drawALT);draw('tc',drawTC);draw('hi',drawHI);draw('vsi',drawVSI);draw('tach',drawTach);
+}
+let last=performance.now(),frame=0;
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  readInputs(dt);
+  if(!paused){const n=2;for(let i=0;i<n;i++)step(dt/n)}
+  S.stallWarn=!S.onGround&&S.ias<S.vStall+5;
+  S.gearWarn=!S.onGround&&S.gearPos<.99&&S.thr<.15;
+  render();
+  if(frame++%3===0)updateUI();
+  requestAnimationFrame(loop);
+}
+load('cruise');
+S.vStall=48;
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

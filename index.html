@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Missed Approach Simulator</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --ink:#15202b; --muted:#5b6b7a; --line:#d9dee4;
+    --accent:#0b5cad; --accent-soft:#e6f0fa;
+    --ph1:#c2410c; --ph1-soft:#fdeee6;
+    --ph2:#0b5cad; --ph2-soft:#e3eefa;
+    --ph3:#15803d; --ph3-soft:#e5f4ea;
+    --warn:#b45309; --warn-soft:#fdf3e1;
+    --bad:#dc2626; --bad-soft:#fdeaea;
+    --good:#15803d; --good-soft:#e5f4ea;
+    --terrain:#8a7a66; --sky:#fbfcfd; --trail:#7c3aed;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1319; --surface:#161d25; --ink:#e6ebf0; --muted:#97a5b2; --line:#2a3440;
+      --accent:#5aa9f0; --accent-soft:#16283a;
+      --ph1:#fb923c; --ph1-soft:#2a1b11;
+      --ph2:#5aa9f0; --ph2-soft:#132436;
+      --ph3:#4ade80; --ph3-soft:#12271a;
+      --warn:#fbbf24; --warn-soft:#2b2410;
+      --bad:#f87171; --bad-soft:#2d1414;
+      --good:#4ade80; --good-soft:#12271a;
+      --terrain:#a8977f; --sky:#121920; --trail:#c4b5fd;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1319; --surface:#161d25; --ink:#e6ebf0; --muted:#97a5b2; --line:#2a3440;
+    --accent:#5aa9f0; --accent-soft:#16283a;
+    --ph1:#fb923c; --ph1-soft:#2a1b11;
+    --ph2:#5aa9f0; --ph2-soft:#132436;
+    --ph3:#4ade80; --ph3-soft:#12271a;
+    --warn:#fbbf24; --warn-soft:#2b2410;
+    --bad:#f87171; --bad-soft:#2d1414;
+    --good:#4ade80; --good-soft:#12271a;
+    --terrain:#a8977f; --sky:#121920; --trail:#c4b5fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
+  header{padding:28px 0 16px}
+  .eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:clamp(1.5rem,4vw,2.1rem);margin:.2em 0 .2em;line-height:1.2}
+  .lede{color:var(--muted);margin:0;max-width:75ch}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+
+  .stage{padding:10px;position:relative}
+  canvas{width:100%;height:440px;display:block;border-radius:8px}
+  .phasebar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 4px 2px;font-size:.78rem;color:var(--muted)}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+
+  .hud{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}
+  .hud div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .hud small{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .hud b{font-size:1.15rem;font-variant-numeric:tabular-nums}
+  #hudPhase{font-size:1rem}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 14px}
+  button{font:inherit;font-weight:600;border-radius:8px;padding:9px 16px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .speed{display:flex;gap:4px;margin-left:auto}
+  .speed button{padding:7px 10px;font-size:.85rem}
+  .speed button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr} canvas{height:340px}}
+  .panel{padding:16px}
+  .panel h2{font-size:1rem;margin:0 0 12px}
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px 18px}
+  label{display:block;font-size:.82rem;font-weight:600;margin-bottom:4px}
+  label output{float:right;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  select,input[type=range]{width:100%}
+  select{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  input[type=range]{accent-color:var(--accent)}
+  .hint{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;border:0;border-radius:0;padding:7px 4px;font-size:.85rem}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  .design dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:.88rem}
+  .design dt{color:var(--muted)} .design dd{margin:0;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+  .badge{display:block;margin:12px 0 0;padding:10px 12px;border-radius:8px;font-size:.88rem;font-weight:600}
+  .badge.ok{background:var(--good-soft);color:var(--good)}
+  .badge.no{background:var(--bad-soft);color:var(--bad)}
+
+  .log{list-style:none;margin:0;padding:0;max-height:230px;overflow:auto;font-size:.86rem}
+  .log li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+  .log li:last-child{border-bottom:0}
+  .log time{color:var(--muted);font-variant-numeric:tabular-nums;min-width:48px}
+  .log .w{color:var(--warn);font-weight:600} .log .b{color:var(--bad);font-weight:700} .log .g{color:var(--good);font-weight:600}
+
+  .notes{margin-top:14px;padding:16px;font-size:.9rem}
+  .notes h2{font-size:1rem;margin:0 0 8px}
+  .notes ul{margin:0;padding-left:18px} .notes li{margin:4px 0}
+  footer{margin-top:24px;font-size:.78rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ICAO Doc 8168 · PANS-OPS</div>
+    <h1>Missed Approach Simulator</h1>
+    <p class="lede">Fly an approach to minima, go around, and watch the aircraft move through the initial, intermediate and final
+      missed approach phases. The simulator checks your climb against the 30 m and 50 m obstacle clearance
+      (MOC) protection. Try an engine-out climb or a late go-around to see protection being lost.</p>
+  </header>
+
+  <div class="card stage">
+    <canvas id="cv" aria-label="Side profile of the approach and missed approach"></canvas>
+    <div class="phasebar">
+      <span><i class="sw" style="background:var(--ph1)"></i>Initial (MAPt → SOC)</span>
+      <span><i class="sw" style="background:var(--ph2)"></i>Intermediate (30 m MOC)</span>
+      <span><i class="sw" style="background:var(--ph3)"></i>Final (50 m MOC)</span>
+      <span><i class="sw" style="background:var(--trail)"></i>Approach &amp; missed approach</span>
+      <span><i class="sw" style="background:var(--accent)"></i>Return &amp; second approach</span>
+      <span style="margin-left:auto">Vertical scale exaggerated</span>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div style="grid-column:span 2"><small>Phase</small><b id="hudPhase">—</b></div>
+    <div><small>Altitude</small><b id="hudAlt">—</b></div>
+    <div><small>Height above obstacle</small><b id="hudAgl">—</b></div>
+    <div><small>Distance</small><b id="hudDist">—</b></div>
+    <div><small>Ground speed</small><b id="hudGs">—</b></div>
+    <div><small>Vertical speed</small><b id="hudVs">—</b></div>
+    <div><small>Gradient</small><b id="hudGrad">—</b></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="primary" id="btnPlay">▶ Start approach</button>
+    <button class="danger" id="btnGA" disabled>GO AROUND</button>
+    <button id="btnReset">↺ Reset</button>
+    <div class="speed" id="speed">
+      <button data-s="1">1×</button><button data-s="2">2×</button><button data-s="4" class="on">4×</button><button data-s="8">8×</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card panel">
+      <h2>Scenario &amp; procedure</h2>
+      <div class="controls">
+        <div>
+          <label>Approach type</label>
+          <div class="seg" id="segType"><button data-v="PA" class="on">Precision (ILS)</button><button data-v="NPA">Non-precision</button></div>
+          <div class="hint" id="typeHint">MAPt = glide path meets DA/H</div>
+        </div>
+        <div>
+          <label for="cat">Aircraft category</label>
+          <select id="cat">
+            <option value="A">Cat A — Vat &lt; 91 kt</option>
+            <option value="B">Cat B — Vat 91–120 kt</option>
+            <option value="C" selected>Cat C — Vat 121–140 kt</option>
+            <option value="D">Cat D — Vat 141–165 kt</option>
+            <option value="E">Cat E — Vat 166–210 kt</option>
+            <option value="H">Cat H — Helicopter</option>
+          </select>
+          <div class="hint" id="catHint"></div>
+        </div>
+        <div>
+          <label for="scen">What happens at minima?</label>
+          <select id="scen">
+            <option value="std" selected>No visual reference at MAPt → go around</option>
+            <option value="vis">Visual reference established → land</option>
+            <option value="early">Early go-around (before MAPt)</option>
+            <option value="late">Late go-around (past MAPt / below minima)</option>
+          </select>
+        </div>
+        <div>
+          <label for="ret">After the missed approach</label>
+          <select id="ret">
+            <option value="yes" selected>Return, fly a new approach &amp; land</option>
+            <option value="no">Stop at missed approach altitude</option>
+          </select>
+        </div>
+        <div>
+          <label for="mins"><span id="minsLbl">DA/H</span> <output id="minsOut"></output></label>
+          <input type="range" id="mins" min="100" max="1000" step="10" value="200">
+        </div>
+        <div>
+          <label for="procG">Procedure gradient (published)</label>
+          <select id="procG">
+            <option value="2">2 % — needs survey &amp; safeguarding</option>
+            <option value="2.5" selected>2.5 % — nominal</option>
+            <option value="3">3 % — authority approval</option>
+            <option value="4">4 % — authority approval</option>
+            <option value="5">5 % — authority approval</option>
+          </select>
+        </div>
+        <div>
+          <label for="perfG">Aircraft climb performance <output id="perfGOut"></output></label>
+          <input type="range" id="perfG" min="1.5" max="8" step="0.1" value="4">
+          <div class="hint"><a href="#" id="eo" style="color:var(--accent)">Engine-out twin (2.1 %)</a> · <a href="#" id="ae" style="color:var(--accent)">All engines (4 %)</a></div>
+        </div>
+        <div>
+          <label for="obsX">Obstacle distance from THR <output id="obsXOut"></output></label>
+          <input type="range" id="obsX" min="2000" max="14000" step="100" value="6500">
+        </div>
+        <div>
+          <label for="obsH">Obstacle height (AGL) <output id="obsHOut"></output></label>
+          <input type="range" id="obsH" min="20" max="260" step="5" value="130">
+        </div>
+        <div>
+          <label for="maAlt">Missed approach altitude <output id="maAltOut"></output></label>
+          <input type="range" id="maAlt" min="1500" max="4000" step="100" value="2000">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:14px;align-content:start">
+      <div class="card panel design">
+        <h2>Procedure design check</h2>
+        <dl>
+          <dt>MAPt</dt><dd id="dMapt"></dd>
+          <dt>Start of climb (SOC)</dt><dd id="dSoc"></dd>
+          <dt>Final phase begins</dt><dd id="dFinal"></dd>
+          <dt>Min clearance, intermediate</dt><dd id="dMinC"></dd>
+          <dt>Gradient needed for 30 m MOC</dt><dd id="dReq"></dd>
+        </dl>
+        <span class="badge" id="dValid"></span>
+      </div>
+      <div class="card panel">
+        <h2>Event log</h2>
+        <ul class="log" id="log"><li><time>—</time><span>Press <b>Start approach</b>.</span></li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card notes">
+    <h2>What the simulator models</h2>
+    <ul>
+      <li><b>Initial phase</b>: MAPt to SOC, no turns. The design assumes no climb here, so SOC = MAPt + MAPt tolerance + transitional tolerance X (15 s of flight).</li>
+      <li><b>Intermediate phase</b>: from SOC, straight climb at the procedure gradient with <b>30 m (98 ft)</b> MOC. It ends where <b>50 m (164 ft)</b> MOC is first obtained and can be maintained.</li>
+      <li><b>Final phase</b>: 50 m MOC (<b>40 m</b> for Cat H), up to the missed approach altitude, where holding, a new approach or en-route flight begins.</li>
+      <li>After a go-around the aircraft keeps sinking briefly (height loss) while it pitches up, then climbs at <i>its</i> performance gradient. If that gradient is below the published one, the aircraft eats into the protection margin.</li>
+      <li><b>Return &amp; land</b>: after levelling at the missed approach altitude, the aircraft holds, turns back outbound, descends, turns inbound and flies a second approach. This time it gets visual reference at minima and lands. You can press GO AROUND again during the second approach.</li>
+      <li>This is a simplified teaching model. The MAPt tolerance, straight missed approach only, and a single obstacle are approximations. Real procedures use the full Doc 8168 Vol II construction.</li>
+    </ul>
+  </div>
+  <footer>Based on ICAO Doc 8168 (PANS-OPS) Vol I &amp; II. For study use only — not for operational planning.</footer>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const FT = 0.3048, KT = 0.514444, NM = 1852, TAN3 = Math.tan(3 * Math.PI / 180);
+  // Typical final approach groundspeeds (kt) & final-phase MOC per category
+  const CAT = {
+    A:{gs:90,  mocF:50, ima:100, fma:110},
+    B:{gs:120, mocF:50, ima:130, fma:150},
+    C:{gs:140, mocF:50, ima:160, fma:240},
+    D:{gs:160, mocF:50, ima:185, fma:265},
+    E:{gs:190, mocF:50, ima:230, fma:275},
+    H:{gs:70,  mocF:40, ima:90,  fma:90}
+  };
+  const TERR = [[-60000,0],[4000,0],[6000,40],[9000,70],[13000,110],[18000,160],[24000,220],[32000,260],[80000,300]];
+
+  let cfg = {}, D = {}, S = {}, running = false, simSpeed = 4, last = 0;
+
+  // ---------- helpers ----------
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmtFt = m => Math.round(m / FT).toLocaleString() + ' ft';
+  const fmtNM = m => (Math.abs(m) / NM).toFixed(2) + ' NM';
+  const glide = x => (300 - x) * TAN3; // 3° path aimed 300 m past THR
+  function terrain(x){
+    for (let i = 1; i < TERR.length; i++){
+      if (x <= TERR[i][0]){
+        const [x0,y0] = TERR[i-1], [x1,y1] = TERR[i];
+        return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+      }
+    }
+    return TERR[TERR.length-1][1];
+  }
+  const obstElev = x => {
+    let t = terrain(x);
+    if (Math.abs(x - cfg.obsX) <= 120) t = Math.max(t, terrain(cfg.obsX) + cfg.obsH);
+    return t;
+  };
+
+  // ---------- read controls ----------
+  function readCfg(){
+    const type = document.querySelector('#segType .on').dataset.v;
+    const cat = $('cat').value;
+    cfg = {
+      type, cat,
+      gs: CAT[cat].gs * KT,
+      mocF: CAT[cat].mocF,
+      mins: +$('mins').value * FT,
+      procG: +$('procG').value / 100,
+      perfG: +$('perfG').value / 100,
+      obsX: +$('obsX').value,
+      obsH: +$('obsH').value,
+      ma: +$('maAlt').value * FT,
+      scen: $('scen').value,
+      ret: $('ret').value === 'yes'
+    };
+    if (cfg.ma < cfg.mins + 150) cfg.ma = cfg.mins + 150;
+    $('minsLbl').textContent = type === 'PA' ? 'DA/H' : 'MDA/H';
+    $('minsOut').textContent = $('mins').value + ' ft';
+    $('perfGOut').textContent = (+$('perfG').value).toFixed(1) + ' %';
+    $('obsXOut').textContent = (cfg.obsX / NM).toFixed(1) + ' NM';
+    $('obsHOut').textContent = cfg.obsH + ' m (' + Math.round(cfg.obsH / FT) + ' ft)';
+    $('maAltOut').textContent = $('maAlt').value + ' ft';
+    $('typeHint').textContent = type === 'PA'
+      ? 'MAPt = point where the glide path meets DA/H'
+      : 'MAPt = fix/facility at the threshold; level at MDA/H until MAPt';
+    const c = CAT[cat];
+    $('catHint').textContent = `GS ≈ ${c.gs} kt · max IAS: int. MA ${c.ima} kt, final MA ${c.fma} kt · final MOC ${c.mocF} m`;
+  }
+
+  // ---------- procedure design ----------
+  function design(){
+    const OCH = cfg.mins, gs = cfg.gs;
+    const mapt = cfg.type === 'PA' ? 300 - OCH / TAN3 : 0;
+    const tol = cfg.type === 'PA' ? 0 : 370 + 3 * gs;     // simplified MAPt tolerance + d
+    const soc = mapt + tol + 15 * gs;                      // + X = 15 s
+    const reachMA = soc + (cfg.ma - OCH) / cfg.procG;
+    const xmax = Math.min(Math.max(reachMA + 4000, 20000), 60000);
+    const xmin = Math.min(-7000, mapt - 3000);
+    const designY = x => x < soc ? OCH : Math.min(cfg.ma, OCH + cfg.procG * (x - soc));
+
+    // sample clearance from SOC
+    const step = 25, xs = [], cs = [];
+    for (let x = soc; x <= xmax; x += step){ xs.push(x); cs.push(designY(x) - obstElev(x)); }
+    // final phase: first point from which clearance >= mocF is maintained
+    let finalStart = null, suffixMin = Infinity;
+    for (let i = cs.length - 1; i >= 0; i--){
+      suffixMin = Math.min(suffixMin, cs[i]);
+      if (suffixMin >= cfg.mocF) finalStart = xs[i]; else break;
+    }
+    let minC = Infinity;
+    const endInt = finalStart ?? xmax;
+    for (let i = 0; i < xs.length && xs[i] <= endInt; i++) minC = Math.min(minC, cs[i]);
+    // gradient required for 30 m everywhere after SOC
+    let gReq = 0;
+    for (let i = 0; i < xs.length; i++){
+      const dx = xs[i] - soc; if (dx < 200) continue;
+      gReq = Math.max(gReq, (obstElev(xs[i]) + 30 - OCH) / dx);
+    }
+    // initial phase obstacle check
+    let initOK = true;
+    for (let x = mapt; x <= soc; x += 25) if (obstElev(x) >= OCH) initOK = false;
+
+    const valid = initOK && finalStart !== null && minC >= 30;
+    D = {OCH, mapt, soc, reachMA, xmin, xmax, designY, finalStart, minC, gReq, valid, initOK,
+         ymax: Math.max(cfg.ma * 1.3, 400)};
+
+    $('dMapt').textContent = cfg.type === 'PA'
+      ? fmtNM(D.mapt) + ' before THR'
+      : 'THR (fix)';
+    $('dSoc').textContent = (D.soc - D.mapt).toFixed(0) + ' m after MAPt';
+    $('dFinal').textContent = finalStart === null ? 'never' : (finalStart >= 0 ? fmtNM(finalStart) + ' past THR' : fmtNM(finalStart) + ' before THR');
+    $('dMinC').textContent = isFinite(minC) ? Math.round(minC) + ' m (' + Math.round(minC / FT) + ' ft)' : '—';
+    $('dReq').textContent = (gReq * 100).toFixed(2) + ' %';
+    const b = $('dValid');
+    if (valid){
+      b.className = 'badge ok';
+      b.textContent = `✓ Procedure valid at ${(cfg.procG*100).toFixed(1)} % — obstacle clears the 30 m MOC.`;
+    } else {
+      b.className = 'badge no';
+      b.textContent = !initOK ? '✗ Obstacle penetrates the initial phase — raise the DA/H or MDA/H.'
+        : `✗ 30 m MOC not met. Raise OCA/H (DA/MDA) or publish a gradient ≥ ${(Math.ceil(gReq*1000)/10).toFixed(1)} %.`;
+    }
+  }
+
+  // ---------- simulation ----------
+  function reset(){
+    running = false;
+    const x0 = D.xmin + 300;
+    S = {x:x0, y:Math.min(glide(x0), cfg.ma), vs:0, gs:cfg.gs, mode:'app', t:0, tg:0, vs0:0,
+         trail:[], trail2:[], flags:{}, phaseSeen:{}, levelStart:0,
+         dir:1, x0, y0:Math.min(glide(x0), cfg.ma), app2:false, circuit:false, turnT:0};
+    $('btnPlay').textContent = '▶ Start approach';
+    $('btnGA').disabled = true;
+    $('log').innerHTML = '<li><time>—</time><span>Ready. Press <b>Start approach</b>.</span></li>';
+    draw(); hud();
+  }
+  function log(msg, cls=''){
+    const li = document.createElement('li');
+    li.innerHTML = `<time>t+${Math.round(S.t)}s</time><span class="${cls}">${msg}</span>`;
+    const l = $('log');
+    if (l.firstChild && l.firstChild.textContent.startsWith('—')) l.innerHTML = '';
+    l.prepend(li);
+  }
+  function once(key, msg, cls){ if (!S.flags[key]){ S.flags[key] = 1; log(msg, cls); } }
+
+  function profile(x){
+    if (cfg.scen === 'vis' || S.app2) return Math.max(0, glide(x));
+    if (cfg.type === 'PA') return Math.max(0, glide(x));
+    return Math.max(D.OCH, glide(x));
+  }
+  function goAround(reason, cls='w'){
+    if (S.mode !== 'app') return;
+    S.mode = 'ga'; S.tg = 0; S.vs0 = S.vs; S.gaX = S.x;
+    log('GO AROUND — ' + reason, cls);
+    $('btnGA').disabled = true;
+  }
+  function phaseAt(x){
+    if (S.mode === 'done' && !S.crash && S.app2) return 'Landed — stopped on runway';
+    if (S.mode === 'rollout') return 'Landing roll';
+    if (S.mode === 'return') return 'Holding / vectors — outbound for a new approach';
+    if (S.mode === 'turn') return S.dir > 0 ? 'Turning inbound' : 'Turning outbound (hold entry)';
+    if (S.mode === 'app') {
+      const pre = S.app2 ? 'Second approach — ' : '';
+      return pre + (x < D.mapt ? 'final approach segment' : (S.app2 || cfg.scen === 'vis' ? 'visual — continuing to land' : 'continuing past MAPt'));
+    }
+    if (S.mode === 'level' || S.mode === 'done') return 'End of missed approach — missed approach altitude';
+    if (x < D.mapt) return 'Missed approach (early) — fly to MAPt';
+    if (x < D.soc) return 'Initial phase';
+    if (D.finalStart === null || x < D.finalStart) return 'Intermediate phase';
+    return 'Final phase';
+  }
+
+  function startTurn(nextDir, nextMode, msg){
+    S.mode = 'turn'; S.turnT = 0; S.nextDir = nextDir; S.nextMode = nextMode; S.vs = 0;
+    S.circuit = true;
+    if (msg) log(msg, 'g');
+  }
+
+  function step(dt){
+    S.t += dt;
+    const mapt = D.mapt;
+    const scen = S.app2 ? 'vis' : cfg.scen;
+    if (S.mode === 'app'){
+      S.x += S.gs * dt;
+      const ny = profile(S.x);
+      S.vs = (ny - S.y) / dt; S.y = ny;
+      if (cfg.type === 'NPA' && scen !== 'vis' && S.y <= D.OCH + 0.5) once('mda','Level at MDA/H — looking for visual reference');
+      if (scen === 'std' && S.x >= mapt) goAround('visual reference not established at MAPt.');
+      if (scen === 'early' && S.x >= mapt - 2000) goAround('initiated early. Fly to the MAPt before any turn; protection assumes turns start at/after MAPt.');
+      if (scen === 'late'){
+        if (S.x >= mapt) once('pastmapt', 'Passed MAPt without visual reference — continuing is outside procedure design!', 'b');
+        if (S.x >= mapt + 12 * S.gs) goAround('late (past MAPt / below minima). Obstacle protection is NOT guaranteed.', 'b');
+      }
+      if (scen === 'vis'){
+        if (S.x >= mapt) once('vis','Visual reference established at minima — continue to land', 'g');
+        if (S.y <= 0.2 && S.x > 0){ S.mode = 'rollout'; S.y = 0; S.vs = 0; log('Touchdown', 'g'); $('btnGA').disabled = true; }
+      }
+    } else if (S.mode === 'ga'){
+      S.x += S.gs * dt; S.tg += dt;
+      const climb = cfg.perfG * S.gs;
+      const r = Math.min(1, S.tg / 6);             // ~6 s pitch-up / config change
+      S.vs = S.vs0 * (1 - r) + climb * r;
+      S.y += S.vs * dt;
+      if (S.x >= mapt) once('mapt','Passed MAPt');
+      if (S.x >= D.soc) once('soc','SOC reached — intermediate phase: straight climb, 30 m MOC, track change ≤ 15°');
+      if (D.finalStart !== null && S.x >= D.finalStart) once('fin', `50 m MOC obtained — final phase begins (turns may be prescribed)`, 'g');
+      if (S.y >= cfg.ma){ S.y = cfg.ma; S.vs = 0; S.mode = 'level'; S.levelStart = S.x; log('Missed approach altitude reached — level off', 'g'); }
+    } else if (S.mode === 'level'){
+      S.x += S.gs * dt;
+      if (S.x - S.levelStart > 1500 || S.x > D.xmax - 200){
+        if (cfg.ret) startTurn(-1, 'return', 'Missed approach complete — entering hold, then outbound for a new approach');
+        else { S.mode = 'done'; log('Missed approach complete — hold, new approach or en-route', 'g'); stop(); }
+      }
+    } else if (S.mode === 'turn'){
+      // 180° turn modelled as ~10 s with little ground progress
+      S.turnT += dt;
+      S.x += S.gs * dt * S.dir * Math.max(0, 1 - S.turnT / 5) * 0.4;
+      if (S.turnT >= 5 && S.dir !== S.nextDir) S.dir = S.nextDir;
+      if (S.turnT >= 10){
+        S.mode = S.nextMode;
+        if (S.mode === 'app'){
+          S.app2 = true; S.flags = {}; S.y = profile(S.x);
+          log('Established inbound — second approach', 'g');
+          if (running) $('btnGA').disabled = false;
+        }
+      }
+    } else if (S.mode === 'return'){
+      S.x -= S.gs * dt;
+      const target = Math.max(S.y0, D.OCH + 100);
+      const dy = target - S.y, rate = 5;             // ~1000 fpm descent
+      S.vs = Math.abs(dy) < rate * dt ? dy / dt : Math.sign(dy) * rate;
+      S.y += S.vs * dt;
+      if (S.x <= S.x0){
+        S.x = S.x0; S.vs = 0;
+        startTurn(1, 'app', 'Turning inbound to intercept final approach');
+      }
+    } else if (S.mode === 'rollout'){
+      S.gs = Math.max(0, S.gs - 2.5 * dt); S.x += S.gs * dt;
+      if (S.gs <= 0){ S.mode = 'done'; log(S.app2 ? '✓ Landed after the missed approach — stopped on runway' : 'Stopped on runway', 'g'); stop(); }
+    }
+    if (S.x > D.xmax - 50 && S.mode !== 'done' && S.mode !== 'turn'){
+      if (cfg.ret && (S.mode === 'ga' || S.mode === 'level')) startTurn(-1, 'return', 'Reached the edge of the area — turning back for a new approach');
+      else { S.mode = 'done'; log('Left the display area', ''); stop(); }
+    }
+
+    // clearance checks after go-around
+    if (S.mode === 'ga' || S.mode === 'level' || S.mode === 'return' || (S.mode === 'app' && S.x > mapt && scen !== 'vis')){
+      const agl = S.y - obstElev(S.x);
+      if (agl <= 0){ log('✗ COLLISION with obstacle/terrain', 'b'); S.mode = 'done'; S.crash = true; stop(); return; }
+      if (S.x > D.soc && S.mode !== 'return'){
+        const inFinal = D.finalStart !== null && S.x >= D.finalStart;
+        const moc = inFinal ? cfg.mocF : 30;
+        if (agl < moc) once('moc'+(inFinal?'f':'i'), `⚠ MOC infringed: ${Math.round(agl)} m above obstacle, ${moc} m required`, 'b');
+        if (S.mode === 'ga' && S.y < D.designY(S.x) - 2) once('below', '⚠ Below nominal missed approach path — climb gradient less than the published one', 'w');
+      }
+    }
+    const tr = S.circuit ? S.trail2 : S.trail;
+    if (tr.length === 0 || Math.hypot(S.x - tr[tr.length-1][0], (S.y - tr[tr.length-1][1]) * 10) > 40) tr.push([S.x, S.y]);
+  }
+  function stop(){ running = false; $('btnPlay').textContent = '▶ Start approach'; $('btnPlay').disabled = true; $('btnGA').disabled = true; }
+
+  function hud(){
+    $('hudPhase').textContent = phaseAt(S.x);
+    $('hudAlt').textContent = fmtFt(S.y);
+    $('hudAgl').textContent = fmtFt(Math.max(0, S.y - obstElev(S.x)));
+    $('hudDist').textContent = S.x < 0 ? fmtNM(S.x) + ' to THR' : fmtNM(S.x) + ' past THR';
+    $('hudGs').textContent = Math.round(S.gs / KT) + ' kt';
+    $('hudVs').textContent = (S.vs >= 0 ? '+' : '') + Math.round(S.vs / FT * 60) + ' fpm';
+    $('hudGrad').textContent = S.gs > 1 ? ((S.vs / S.gs) * 100).toFixed(1) + ' %' : '—';
+  }
+
+  // ---------- drawing ----------
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  function draw(){
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const C = n => css(n);
+    const L = 52, R = 14, T = 30, B = 30;
+    const X = x => L + (x - D.xmin) / (D.xmax - D.xmin) * (w - L - R);
+    const Y = y => h - B - y / D.ymax * (h - T - B);
+
+    ctx.fillStyle = C('--sky'); ctx.fillRect(0,0,w,h);
+
+    // phase bands
+    const band = (x0, x1, col, label, lcol) => {
+      if (x1 <= x0) return;
+      ctx.fillStyle = col; ctx.fillRect(X(x0), T, X(x1) - X(x0), h - T - B);
+      ctx.fillStyle = lcol; ctx.font = '600 11px system-ui,sans-serif'; ctx.textAlign = 'center';
+      if (X(x1) - X(x0) > 44) ctx.fillText(label, (X(x0)+X(x1))/2, T - 10);
+    };
+    const fEnd = D.finalStart ?? D.xmax;
+    band(D.mapt, D.soc, C('--ph1-soft'), 'INITIAL', C('--ph1'));
+    band(D.soc, fEnd, C('--ph2-soft'), 'INTERMEDIATE', C('--ph2'));
+    if (D.finalStart !== null) band(D.finalStart, D.xmax, C('--ph3-soft'), 'FINAL', C('--ph3'));
+    ctx.fillStyle = C('--muted'); ctx.textAlign = 'center';
+    if (X(D.mapt) - L > 80) ctx.fillText('FINAL APPROACH', (L + X(D.mapt))/2, T - 10);
+
+    // grid
+    ctx.strokeStyle = C('--line'); ctx.lineWidth = 1; ctx.fillStyle = C('--muted'); ctx.font = '11px system-ui,sans-serif';
+    ctx.textAlign = 'right';
+    for (let ft = 0; ft * FT <= D.ymax; ft += 500){
+      const yy = Y(ft * FT);
+      ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(w - R, yy); ctx.stroke();
+      ctx.fillText(ft + ' ft', L - 6, yy + 4);
+    }
+    ctx.textAlign = 'center';
+    const nmStep = (D.xmax - D.xmin) / NM > 18 ? 4 : 2;
+    for (let n = Math.ceil(D.xmin / NM / nmStep) * nmStep; n * NM <= D.xmax; n += nmStep){
+      ctx.fillText(n === 0 ? 'THR' : (n > 0 ? '+' : '') + n + ' NM', X(n * NM), h - 10);
+    }
+
+    // terrain
+    ctx.beginPath(); ctx.moveTo(X(D.xmin), Y(0));
+    for (let x = D.xmin; x <= D.xmax; x += (D.xmax - D.xmin) / 200) ctx.lineTo(X(x), Y(terrain(x)));
+    ctx.lineTo(X(D.xmax), Y(0)); ctx.closePath();
+    ctx.globalAlpha = .28; ctx.fillStyle = C('--terrain'); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = C('--terrain'); ctx.lineWidth = 1.5; ctx.stroke();
+
+    // runway
+    ctx.strokeStyle = C('--ink'); ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(3000), Y(0)); ctx.stroke();
+
+    // obstacle (lattice tower)
+    const ox = X(cfg.obsX), ob = Y(terrain(cfg.obsX)), ot = Y(terrain(cfg.obsX) + cfg.obsH);
+    ctx.strokeStyle = C('--ink'); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox - 7, ob); ctx.lineTo(ox, ot); ctx.lineTo(ox + 7, ob);
+    for (let k = 1; k < 5; k++){ const yy = ob + (ot - ob) * k / 5, hw = 7 * (1 - k / 5); ctx.moveTo(ox - hw, yy); ctx.lineTo(ox + hw, yy); }
+    ctx.stroke();
+    ctx.fillStyle = C('--bad'); ctx.beginPath(); ctx.arc(ox, ot, 3, 0, 7); ctx.fill();
+
+    // glide path
+    ctx.setLineDash([6,5]); ctx.strokeStyle = C('--muted'); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(X(D.xmin), Y(Math.min(glide(D.xmin), D.ymax))); ctx.lineTo(X(300), Y(0)); ctx.stroke();
+    // OCA/H line
+    ctx.setLineDash([12,6]); ctx.strokeStyle = C('--ink'); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(L, Y(D.OCH)); ctx.lineTo(X(D.soc), Y(D.OCH)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C('--ink'); ctx.textAlign = 'left'; ctx.font = '700 11px system-ui,sans-serif';
+    ctx.fillText((cfg.type === 'PA' ? 'DA/H ' : 'MDA/H ') + Math.round(D.OCH / FT) + ' ft', L + 4, Y(D.OCH) - 6);
+    // MA altitude
+    ctx.setLineDash([2,4]); ctx.strokeStyle = C('--muted');
+    ctx.beginPath(); ctx.moveTo(L, Y(cfg.ma)); ctx.lineTo(w - R, Y(cfg.ma)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = C('--muted'); ctx.font = '11px system-ui,sans-serif';
+    ctx.fillText('Missed approach altitude ' + Math.round(cfg.ma / FT) + ' ft', L + 4, Y(cfg.ma) - 6);
+
+    // MOC protection bands below nominal path
+    const mocBand = (x0, x1, moc, col) => {
+      if (x1 <= x0) return;
+      const n = 80, d = (x1 - x0) / n;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++){ const x = x0 + i*d; ctx[i?'lineTo':'moveTo'](X(x), Y(D.designY(x))); }
+      for (let i = n; i >= 0; i--){ const x = x0 + i*d; ctx.lineTo(X(x), Y(D.designY(x) - moc)); }
+      ctx.closePath(); ctx.globalAlpha = .22; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+    };
+    mocBand(D.soc, fEnd, 30, C('--ph2'));
+    if (D.finalStart !== null) mocBand(D.finalStart, D.xmax, cfg.mocF, C('--ph3'));
+
+    // nominal missed approach path
+    const seg = (x0, x1, col) => {
+      if (x1 <= x0) return;
+      ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath();
+      const n = 60; for (let i = 0; i <= n; i++){ const x = x0 + (x1-x0)*i/n; ctx[i?'lineTo':'moveTo'](X(x), Y(D.designY(x))); }
+      ctx.stroke();
+    };
+    seg(D.mapt, D.soc, C('--ph1')); seg(D.soc, fEnd, C('--ph2')); if (D.finalStart !== null) seg(D.finalStart, D.xmax, C('--ph3'));
+
+    // markers
+    const vline = (x, label, col) => {
+      ctx.strokeStyle = col; ctx.setLineDash([3,4]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(X(x), T); ctx.lineTo(X(x), h - B); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = col; ctx.font = '700 11px system-ui,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, X(x), h - B - 6);
+    };
+    vline(D.mapt, 'MAPt', C('--ph1'));
+    ctx.fillStyle = C('--ph2'); ctx.beginPath(); ctx.arc(X(D.soc), Y(D.OCH), 4.5, 0, 7); ctx.fill();
+    ctx.font = '700 11px system-ui,sans-serif'; ctx.textAlign = 'left'; ctx.fillText('SOC', X(D.soc) + 6, Y(D.OCH) + 16);
+    if (D.finalStart !== null) vline(D.finalStart, '50 m MOC', C('--ph3'));
+
+    // trail
+    const drawTrail = (tr, col, dash, withHead) => {
+      if (tr.length < 2 && !withHead) return;
+      ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.setLineDash(dash); ctx.beginPath();
+      tr.forEach(([x,y], i) => ctx[i?'lineTo':'moveTo'](X(x), Y(y)));
+      if (withHead && tr.length) ctx.lineTo(X(S.x), Y(S.y));
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    drawTrail(S.trail, C('--trail'), [], !S.circuit);
+    drawTrail(S.trail2, C('--accent'), [7,5], S.circuit);
+
+    // aircraft
+    const sx = (w - L - R) / (D.xmax - D.xmin), sy = (h - T - B) / D.ymax;
+    const ang = Math.atan2(-(S.vs) * sy, Math.max(S.gs, 1) * sx);
+    ctx.save(); ctx.translate(X(S.x), Y(S.y)); ctx.scale(S.dir, 1); ctx.rotate(ang);
+    ctx.fillStyle = S.crash ? C('--bad') : C('--ink');
+    ctx.beginPath();
+    ctx.moveTo(-16,-1.5); ctx.lineTo(10,-2.5); ctx.quadraticCurveTo(16,0,10,2.5); ctx.lineTo(-16,1.5); ctx.closePath();
+    ctx.moveTo(-3,0); ctx.lineTo(4,-1); ctx.lineTo(-1,-9); ctx.lineTo(-5,-9); ctx.closePath();
+    ctx.moveTo(-16,-1); ctx.lineTo(-12,-1); ctx.lineTo(-15,-8); ctx.lineTo(-18,-8); ctx.closePath();
+    ctx.fill(); ctx.restore();
+  }
+
+  // ---------- loop ----------
+  function frame(ts){
+    if (!running){ last = 0; return; }
+    const real = last ? Math.min(0.05, (ts - last) / 1000) : 0; last = ts;
+    let dt = real * simSpeed;
+    while (dt > 0 && running){ const d = Math.min(0.05, dt); step(d); dt -= d; }
+    draw(); hud();
+    if (running) requestAnimationFrame(frame);
+  }
+
+  // ---------- events ----------
+  function rebuild(){ readCfg(); design(); reset(); $('btnPlay').disabled = false; }
+  ['cat','scen','ret','mins','procG','perfG','obsX','obsH','maAlt'].forEach(id => $(id).addEventListener('input', rebuild));
+  $('segType').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#segType button').forEach(x => x.classList.toggle('on', x === b));
+    $('mins').value = b.dataset.v === 'PA' ? 200 : 450;
+    rebuild();
+  });
+  $('eo').addEventListener('click', e => { e.preventDefault(); $('perfG').value = 2.1; rebuild(); });
+  $('ae').addEventListener('click', e => { e.preventDefault(); $('perfG').value = 4; rebuild(); });
+  $('btnPlay').addEventListener('click', () => {
+    if (S.mode === 'done') return;
+    running = !running;
+    $('btnPlay').textContent = running ? '❚❚ Pause' : '▶ Resume';
+    $('btnGA').disabled = !(running && S.mode === 'app');
+    if (running){ if (S.t === 0) log('Established on final approach — ' + (cfg.type === 'PA' ? 'ILS 3° glide path' : 'non-precision approach')); requestAnimationFrame(frame); }
+  });
+  $('btnGA').addEventListener('click', () => goAround('pilot-initiated.' + (S.x < D.mapt ? ' Early — fly to MAPt before turning.' : S.x > D.mapt ? ' Past MAPt — protection not guaranteed!' : ''), S.x > D.mapt ? 'b' : 'w'));
+  $('btnReset').addEventListener('click', () => { reset(); $('btnPlay').disabled = false; });
+  $('speed').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    simSpeed = +b.dataset.s;
+    document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  window.addEventListener('resize', draw);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+  rebuild();
+})();
+</script>
+</body>
+</html>
